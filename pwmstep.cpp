@@ -6,14 +6,14 @@
 #include<Arduino.h>
 
 #define DEBUG
-#define DBG_WAIT_FOR_CONNECT
-#define DBG_START_PAUSED
+//#define DBG_WAIT_FOR_CONNECT
+//#define DBG_START_PAUSED
 #include <dbg.h>
 
-// D10 -- PA 20
-// altsel G (TCC0/WO[0])
+// D6 -- PA 18
+// altsel G (TCC0/WO[6])
 constexpr unsigned int PORT_GROUP = 0;
-constexpr unsigned int PORT_PIN = 20;
+constexpr unsigned int PORT_PIN = 18;
 constexpr unsigned int PORT_PIN_BIT = (uint32_t)(1 << PORT_PIN);
 constexpr unsigned int PORT_FN = 0x6; // 0=A, 1=B, ... 0x5=F, 0x6=G, ... 
 
