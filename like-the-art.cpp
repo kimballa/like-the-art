@@ -24,7 +24,7 @@ constexpr unsigned int FINE_STEP_DELAY = 25; // milliseconds.
 constexpr unsigned int HOLD_TOP_DELAY = 2000;
 constexpr unsigned int HOLD_BOTTOM_DELAY = 500;
 
-constexpr unsigned int PWM_FREQ = 2000; // 2 KHz
+constexpr unsigned int PWM_FREQ = 6000; // 6 KHz
 constexpr unsigned int PWM_CLOCK_HZ = 6000000; // We configure TCC0 to 48MHz prescaled by 8 = 6 MHz.
 // What is the value where the PWM clock rolls over based on our target PWM frequency?
 constexpr unsigned int PWM_WAVE_COUNT = (PWM_CLOCK_HZ / PWM_FREQ) - 1;
