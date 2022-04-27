@@ -1,7 +1,7 @@
 # (c) Copyright 2022 Aaron Kimball
 
-prog_name := pwmstep
-libs := PyArduinoDebug
+prog_name := like-the-art
+libs := Wire i2cparallel PyArduinoDebug
 src_dirs := .
 
 BOARD = adafruit:samd:adafruit_feather_m4
