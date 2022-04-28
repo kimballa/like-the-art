@@ -51,7 +51,7 @@ private:
   Tcc *const _TCC;
 };
 
-PwmTimer makePwmTimer(uint32_t arduinoPin, uint32_t pwmFreq);
+extern PwmTimer makePwmTimer(uint32_t arduinoPin, uint32_t pwmFreq, int &retval);
 
 constexpr int ERR_SUCCESS = 0; // Return code '0' is success, not an error.
 constexpr int ERR_MAKE_PWM_NOT_A_TCC = 1; // This only works with TCC's, not TC's.

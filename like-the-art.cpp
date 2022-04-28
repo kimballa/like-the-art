@@ -10,6 +10,7 @@ constexpr unsigned int PORT_GROUP = 0; // 0 = PORTA
 constexpr unsigned int PORT_PIN = 18;
 constexpr unsigned int PORT_FN = 0x6; // 0=A, 1=B, ... 0x5=F, 0x6=G, ...
 
+static Tcc* const TCC = TCC0;
 constexpr unsigned int PWM_CHANNEL = 0;
 constexpr unsigned int PWM_FREQ = 6000; // 6 KHz
 
@@ -24,8 +25,11 @@ constexpr unsigned int NUM_STEPS_FINE = 200;
 constexpr unsigned int COARSE_STEP_SIZE = PWM_FREQ / NUM_STEPS_COARSE;
 constexpr unsigned int FINE_STEP_SIZE = PWM_FREQ / NUM_STEPS_FINE;
 
-PwmTimer pwmTimer(PORT_GROUP, PORT_PIN, PORT_FN, TCC0, PWM_CHANNEL, PWM_FREQ, DEFAULT_PWM_PRESCALER);
+PwmTimer pwmTimer(PORT_GROUP, PORT_PIN, PORT_FN, TCC, PWM_CHANNEL, PWM_FREQ, DEFAULT_PWM_PRESCALER);
 
+// I2C is connected to two PCF8574N's, one on channel 0x20, one on 0x21.
+I2CParallel parallelBank0;
+I2CParallel parallelBank1;
 
 // State machine that drives this skech is based on cycling through the following modes,
 // where we then take a number of PWM-varying actions that cycle 'step' through different ranges
@@ -43,7 +47,18 @@ static int mode = MODE_COARSE;
 static int step = 0;
 
 void setup() {
+  DBGSETUP();
+
+  // Set up PWM on PORT_GROUP:PORT_PIN via TCC0.
   pwmTimer.setupTcc();
+
+  // Connect to I2C parallel bus expanders.
+  Wire.begin();
+  parallelBank0.init(    I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
+  parallelBank1.init(1 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
+
+  // Define signs and map them to I/O channels.
+  setupSigns(parallelBank0, parallelBank1);
 }
 
 void loop() {
