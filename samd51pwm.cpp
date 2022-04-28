@@ -7,7 +7,7 @@
 #include "samd51pwm.h"
 
 /** A PWM timer returned by makePwmTimer() if it cannot actually validate. */
-static PwmTimer INVALID_PWM_TIMER(0, 0, 0, NULL, 0, 100, 100);
+static PwmTimer INVALID_PWM_TIMER(0, 0, 0, NULL, 0, 100, DEFAULT_PWM_PRESCALER);
 
 PwmTimer makePwmTimer(uint32_t arduinoPin, uint32_t pwmFreq, int &retval) {
   retval = ERR_SUCCESS;
@@ -48,15 +48,16 @@ PwmTimer makePwmTimer(uint32_t arduinoPin, uint32_t pwmFreq, int &retval) {
     altSelFn = 0x6; // function 'G'
   }
 
-  return std::move(PwmTimer(portGroup, portPin, altSelFn, tcc, tccChan, pwmFreq, DEFAULT_PWM_CLOCK_HZ));
+  return std::move(PwmTimer(portGroup, portPin, altSelFn, tcc, tccChan, pwmFreq, DEFAULT_PWM_PRESCALER));
 }
 
 PwmTimer::PwmTimer(uint32_t portGroup, uint32_t portPin, uint32_t portFn, Tcc* const tcc,
-    uint32_t pwmChannel, uint32_t pwmFreq, uint32_t pwmClockHz):
+    uint32_t pwmChannel, uint32_t pwmFreq, uint32_t pwmPrescaler):
     _portGroup(portGroup), _portPin(portPin), _portPinBit((uint32_t)(1 << portPin)),
     _portFn(portFn), _TCC(tcc), _pwmChannel(pwmChannel),
-    _pwmFreq(pwmFreq), _pwmClockHz(pwmClockHz),
-    _pwmWaveCount((pwmClockHz / pwmFreq) - 1), _dutyCycle(pwmFreq / 2)
+    _pwmFreq(pwmFreq), _pwmPrescaler(pwmPrescaler),
+    _pwmClockHz(TCC_PLL_FREQ / pwmPrescaler),
+    _pwmWaveCount((_pwmClockHz / pwmFreq) - 1), _dutyCycle(pwmFreq / 2)
     {
 }
 
@@ -166,8 +167,40 @@ int PwmTimer::setupTcc() {
                           GCLK_PCHCTRL_CHEN |        // Enable the TCCn peripheral channel
                           GCLK_PCHCTRL_GEN_GCLK7;    // Connect generic clock 7 to TCCn
 
-  _TCC->CTRLA.reg = TC_CTRLA_PRESCALER_DIV8 |        // Set prescaler to 8, 48MHz/8 = 6MHz
-                    TC_CTRLA_PRESCSYNC_PRESC;        // Set the reset/reload to trigger on prescaler clock
+  unsigned int prescaler_flag = 0;
+  switch (_pwmPrescaler) {
+  case 1:
+    prescaler_flag = TC_CTRLA_PRESCALER_DIV1;
+    break;
+  case 2:
+    prescaler_flag = TC_CTRLA_PRESCALER_DIV2;
+    break;
+  case 4:
+    prescaler_flag = TC_CTRLA_PRESCALER_DIV4;
+    break;
+  case 8:
+    prescaler_flag = TC_CTRLA_PRESCALER_DIV8;
+    break;
+  case 16:
+    prescaler_flag = TC_CTRLA_PRESCALER_DIV16;
+    break;
+  case 64:
+    prescaler_flag = TC_CTRLA_PRESCALER_DIV64;
+    break;
+  case 256:
+    prescaler_flag = TC_CTRLA_PRESCALER_DIV256;
+    break;
+  case 1024:
+    prescaler_flag = TC_CTRLA_PRESCALER_DIV1024;
+    break;
+  default:
+    prescaler_flag = TC_CTRLA_PRESCALER_DIV8;
+    break;
+  }
+
+  // Set prescaler (Our default is 8, 48MHz/8 = 6MHz) and set reset/reload to trigger on prescaler
+  // clock.
+  _TCC->CTRLA.reg = prescaler_flag | TC_CTRLA_PRESCSYNC_PRESC;
 
   _TCC->WAVE.reg = TC_WAVE_WAVEGEN_NPWM;   // Set-up TCCn timer for Normal (single slope) PWM mode (NPWM)
   while (_TCC->SYNCBUSY.bit.WAVE);         // Wait for synchronization
@@ -177,7 +210,7 @@ int PwmTimer::setupTcc() {
   _TCC->COUNT.reg = 0;
   while (_TCC->SYNCBUSY.bit.PER);          // Wait for synchronization
 
-  setDutyCycle(_dutyCycle);
+  setDutyCycle(_dutyCycle); // starts at 50/50 from c'tor, if not set by user already.
   enable();
 
   return ERR_SUCCESS;

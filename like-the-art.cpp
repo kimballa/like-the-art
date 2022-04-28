@@ -5,23 +5,18 @@
 
 #include "like-the-art.h"
 
-// D6 -- PA 18
-// altsel G (TCC0/WO[6])
-constexpr unsigned int PORT_GROUP = 0;
+// PWM is on D6 -- PA18, altsel G (TCC0/WO[6]; channel 0)
+constexpr unsigned int PORT_GROUP = 0; // 0 = PORTA
 constexpr unsigned int PORT_PIN = 18;
 constexpr unsigned int PORT_FN = 0x6; // 0=A, 1=B, ... 0x5=F, 0x6=G, ...
 
 constexpr unsigned int PWM_CHANNEL = 0;
 constexpr unsigned int PWM_FREQ = 6000; // 6 KHz
-constexpr unsigned int PWM_CLOCK_HZ = 6000000; // We configure TCC0 to 48MHz prescaled by 8 = 6 MHz.
-
-PwmTimer pwmTimer(PORT_GROUP, PORT_PIN, PORT_FN, TCC0, PWM_CHANNEL, PWM_FREQ, PWM_CLOCK_HZ);
 
 constexpr unsigned int COARSE_STEP_DELAY = 1000; // milliseconds per step.
 constexpr unsigned int FINE_STEP_DELAY = 25; // milliseconds.
 constexpr unsigned int HOLD_TOP_DELAY = 2000;
 constexpr unsigned int HOLD_BOTTOM_DELAY = 500;
-
 
 constexpr unsigned int NUM_STEPS_COARSE = 10;
 constexpr unsigned int NUM_STEPS_FINE = 200;
@@ -29,6 +24,12 @@ constexpr unsigned int NUM_STEPS_FINE = 200;
 constexpr unsigned int COARSE_STEP_SIZE = PWM_FREQ / NUM_STEPS_COARSE;
 constexpr unsigned int FINE_STEP_SIZE = PWM_FREQ / NUM_STEPS_FINE;
 
+PwmTimer pwmTimer(PORT_GROUP, PORT_PIN, PORT_FN, TCC0, PWM_CHANNEL, PWM_FREQ, DEFAULT_PWM_PRESCALER);
+
+
+// State machine that drives this skech is based on cycling through the following modes,
+// where we then take a number of PWM-varying actions that cycle 'step' through different ranges
+// and at different speeds.
 constexpr int MODE_COARSE = 0;
 constexpr int MODE_FINE_UP = 1;
 constexpr int MODE_HOLD_TOP = 2;

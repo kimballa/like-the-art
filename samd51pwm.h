@@ -10,6 +10,8 @@
 #include<Arduino.h>
 #include<samd.h>
 
+constexpr unsigned int TCC_PLL_FREQ = 48000000; // Use 48MHz base clock.
+constexpr unsigned int DEFAULT_PWM_PRESCALER = 8;
 constexpr unsigned int DEFAULT_PWM_CLOCK_HZ = 6000000; // 48MHz clock div 8 = 6 MHz.
 
 /**
@@ -18,7 +20,7 @@ constexpr unsigned int DEFAULT_PWM_CLOCK_HZ = 6000000; // 48MHz clock div 8 = 6 
 class PwmTimer {
 public:
   PwmTimer(uint32_t portGroup, uint32_t portPin, uint32_t portFn, Tcc* tcc,
-      uint32_t pwmChannel, uint32_t pwmFreq, uint32_t pwmClockHz);
+      uint32_t pwmChannel, uint32_t pwmFreq, uint32_t pwmPrescaler);
   ~PwmTimer();
 
   void enable();
@@ -28,6 +30,7 @@ public:
   uint32_t getDutyCycle() const { return _dutyCycle; };
 
   uint32_t getPwmFreq() const { return _pwmFreq; };
+  uint32_t getPwmClockFreq() const { return _pwmClockHz; };
   bool isEnabled() const { return isValid() && _TCC->CTRLA.bit.ENABLE != 0; };
   bool isValid() const { return _TCC != NULL; };
 
@@ -41,6 +44,7 @@ private:
   const uint32_t _portFn;
   const uint32_t _pwmChannel;
   const uint32_t _pwmFreq;
+  const uint32_t _pwmPrescaler;
   const uint32_t _pwmClockHz;
   const uint32_t _pwmWaveCount;
   uint32_t _dutyCycle;
