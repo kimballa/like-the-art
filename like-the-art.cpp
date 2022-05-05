@@ -27,9 +27,10 @@ constexpr unsigned int FINE_STEP_SIZE = PWM_FREQ / NUM_STEPS_FINE;
 
 PwmTimer pwmTimer(PORT_GROUP, PORT_PIN, PORT_FN, TCC, PWM_CHANNEL, PWM_FREQ, DEFAULT_PWM_PRESCALER);
 
-// I2C is connected to two PCF8574N's, one on channel 0x20, one on 0x21.
+// I2C is connected to 3 PCF8574N's, on channel 0x20, 0x21, and 0x22.
 I2CParallel parallelBank0;
 I2CParallel parallelBank1;
+I2CParallel buttonBank;
 
 // State machine that drives this skech is based on cycling through the following modes,
 // where we then take a number of PWM-varying actions that cycle 'step' through different ranges
@@ -46,6 +47,17 @@ static int mode = MODE_COARSE;
 
 static int step = 0;
 
+// TODO(aaron): Move button logic out to a different cpp module.
+static uint8_t lastButtonState = 0xFF;
+void buttonBankISR() {
+  uint8_t newButtonState = buttonBank.read();
+  if (newButtonState != lastButtonState) {
+    DBGPRINT("Button state change");
+    DBGPRINT(newButtonState);
+    lastButtonState = newButtonState;
+  }
+}
+
 void setup() {
   DBGSETUP();
 
@@ -54,19 +66,26 @@ void setup() {
 
   // Connect to I2C parallel bus expanders.
   Wire.begin();
-  parallelBank0.init(    I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
+  parallelBank0.init(0 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
   parallelBank1.init(1 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
+
+  buttonBank.init(   2 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
+  buttonBank.enableInputs(0xFF); // all 8 channels of button bank are inputs.
+  buttonBank.initInterrupt(9, buttonBankISR);
 
   // Define signs and map them to I/O channels.
   setupSigns(parallelBank0, parallelBank1);
 }
 
 void loop() {
+/*
   DBGPRINT("mode:");
   DBGPRINT(mode);
   DBGPRINT("step:");
   DBGPRINT(step);
+  */
 
+  DBGPRINT(buttonBank.read());
   switch (mode) {
   case MODE_COARSE:
     {
