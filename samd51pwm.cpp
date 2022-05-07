@@ -202,7 +202,8 @@ int PwmTimer::setupTcc() {
   // clock.
   _TCC->CTRLA.reg = prescaler_flag | TC_CTRLA_PRESCSYNC_PRESC;
 
-  _TCC->WAVE.reg = TC_WAVE_WAVEGEN_NPWM;   // Set-up TCCn timer for Normal (single slope) PWM mode (NPWM)
+  // Set-up TCCn timer for Normal (single slope) PWM mode (NPWM)
+  _TCC->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM;
   while (_TCC->SYNCBUSY.bit.WAVE);         // Wait for synchronization
 
   // Set-up the PER (period) register for specified PWM freq and reset the counter.

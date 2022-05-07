@@ -89,6 +89,7 @@ void loop() {
   switch (mode) {
   case MODE_COARSE:
     {
+      signs[0]->enable();
       step++;
       if (step >= NUM_STEPS_COARSE) {
         step = 0;
@@ -102,6 +103,7 @@ void loop() {
   case MODE_FINE_UP:
     {
       // Fine step mode, increasing brightness.
+      signs[0]->enable();
       step++;
       if (step >= NUM_STEPS_FINE) {
         mode++; // next mode: hold at top brightness.
@@ -112,6 +114,7 @@ void loop() {
     break;
   case MODE_HOLD_TOP:
     {
+      signs[0]->enable();
       pwmTimer.setDutyCycle(PWM_FREQ);
       delay(HOLD_TOP_DELAY);
       step = NUM_STEPS_FINE;
@@ -120,6 +123,7 @@ void loop() {
     break;
   case MODE_FINE_DOWN:
     {
+      signs[0]->enable();
       step--;
       if (step == 0) {
         mode++;
@@ -130,6 +134,7 @@ void loop() {
     break;
   case MODE_HOLD_BOTTOM:
     {
+      signs[0]->disable();
       // Blank.
       pwmTimer.setDutyCycle(0);
       delay(HOLD_BOTTOM_DELAY);

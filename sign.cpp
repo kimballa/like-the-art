@@ -7,29 +7,29 @@
 #include "like-the-art.h"
 
 void I2CSignChannel::setup() {
-  // Nothing to do.
+  disable();
 }
 
 void I2CSignChannel::enable() {
-  _bus.setAnd(~_bit); // Set our pin bit low.
+  _bus.setOr(_bit); // Set our pin bit high.
 }
 
 void I2CSignChannel::disable() {
-  _bus.setOr(_bit); // Set our pin bit high.
+  _bus.setAnd(~_bit); // Set our pin bit low.
 }
 
 
 void GpioSignChannel::setup() {
   pinMode(_pin, OUTPUT);
-  digitalWrite(_pin, 1); // immediately set pin to 'high' to turn off
+  disable();
 }
 
 void GpioSignChannel::enable() {
-  digitalWrite(_pin, 0);
+  digitalWrite(_pin, 1);
 }
 
 void GpioSignChannel::disable() {
-  digitalWrite(_pin, 1);
+  digitalWrite(_pin, 0);
 }
 
 
