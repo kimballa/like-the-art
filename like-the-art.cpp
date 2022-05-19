@@ -21,16 +21,25 @@ static Tcc* const TCC = TCC0;
 constexpr unsigned int PWM_CHANNEL = 0;
 constexpr unsigned int PWM_FREQ = 6000; // 6 KHz
 
-constexpr unsigned int COARSE_STEP_DELAY = 1000; // milliseconds per step.
-constexpr unsigned int FINE_STEP_DELAY = 25; // milliseconds.
-constexpr unsigned int HOLD_TOP_DELAY = 2000;
-constexpr unsigned int HOLD_BOTTOM_DELAY = 500;
+constexpr unsigned long COARSE_STEP_DELAY = 1000 * 1000; // microseconds per step.
+constexpr unsigned long FINE_STEP_DELAY = 25 * 1000; // microseconds.
+constexpr unsigned long HOLD_TOP_DELAY = 2000 * 1000;
+constexpr unsigned long HOLD_BOTTOM_DELAY = 500 * 1000;
 
 constexpr unsigned int NUM_STEPS_COARSE = 10;
 constexpr unsigned int NUM_STEPS_FINE = 200;
 
 constexpr unsigned int COARSE_STEP_SIZE = PWM_FREQ / NUM_STEPS_COARSE;
 constexpr unsigned int FINE_STEP_SIZE = PWM_FREQ / NUM_STEPS_FINE;
+
+/** Every loop iteration lasts for 10ms. */
+constexpr unsigned int LOOP_MICROS = 10 * 1000;
+
+/**
+ * When we want to hold at a current display state, we sleep in LOOP_MICROS increments
+ * until remaining_sleep_micros is zero.
+ */
+unsigned int remaining_sleep_micros = 0;
 
 PwmTimer pwmTimer(PORT_GROUP, PORT_PIN, PORT_FN, TCC, PWM_CHANNEL, PWM_FREQ, DEFAULT_PWM_PRESCALER);
 
@@ -94,7 +103,53 @@ void setup() {
   setupSigns(parallelBank0, parallelBank1);
 }
 
+/**
+ * Sleep for the appropriate amount of time to make each loop iteration
+ * take an equal LOOP_MICROS microseconds of time.
+ */
+static inline void sleep_loop_increment(unsigned long loop_start_micros) {
+  unsigned long cur_micros = micros();
+  unsigned long delay_time = LOOP_MICROS;
+  if (cur_micros < loop_start_micros) {
+    // Clock wraparound happened mid-loop. Pretend the loop was zero-duration.
+    cur_micros = loop_start_micros;
+  }
+  unsigned long loop_exec_duration = cur_micros - loop_start_micros;
+  if (loop_exec_duration > LOOP_MICROS) {
+    delay_time = 0; // The loop actually exceeded the target interval. No need to sleep.
+  } else {
+    delay_time -= loop_exec_duration; // Subtract loop runtime from total sleep.
+  }
+
+  if (delay_time > remaining_sleep_micros) {
+    // Don't sleep for longer than necessary to pay off the sleep debt for the current state cycle.
+    delay_time = remaining_sleep_micros;
+  }
+
+  delayMicroseconds(delay_time);
+
+  if (LOOP_MICROS >= remaining_sleep_micros) {
+    // Sleep debt is paid off. Next loop we advance state.
+    remaining_sleep_micros = 0;
+  } else {
+    remaining_sleep_micros -= LOOP_MICROS;
+  }
+}
+
 void loop() {
+  unsigned int loop_start_micros = micros();
+
+  // Poll buttons and dark sensor every loop.
+  DBGPRINT(buttonBank.read());
+
+  if (remaining_sleep_micros > 0) {
+    // Do not advance the state machine. Our existing sleep debt remains to be paid off.
+    sleep_loop_increment(loop_start_micros);
+    return;
+  }
+
+  // Advance to next state.
+
 /*
   DBGPRINT("mode:");
   DBGPRINT(mode);
@@ -102,7 +157,6 @@ void loop() {
   DBGPRINT(step);
   */
 
-  DBGPRINT(buttonBank.read());
   switch (mode) {
   case MODE_COARSE:
     {
@@ -114,7 +168,7 @@ void loop() {
         mode++;
       }
       pwmTimer.setDutyCycle(step * COARSE_STEP_SIZE);
-      delay(COARSE_STEP_DELAY);
+      remaining_sleep_micros = COARSE_STEP_DELAY;
     };
     break;
   case MODE_FINE_UP:
@@ -126,14 +180,14 @@ void loop() {
         mode++; // next mode: hold at top brightness.
       }
       pwmTimer.setDutyCycle(step * FINE_STEP_SIZE);
-      delay(FINE_STEP_DELAY);
+      remaining_sleep_micros = FINE_STEP_DELAY;
     };
     break;
   case MODE_HOLD_TOP:
     {
       signs[0]->enable();
       pwmTimer.setDutyCycle(PWM_FREQ);
-      delay(HOLD_TOP_DELAY);
+      remaining_sleep_micros = HOLD_TOP_DELAY;
       step = NUM_STEPS_FINE;
       mode++;
     };
@@ -146,7 +200,7 @@ void loop() {
         mode++;
       }
       pwmTimer.setDutyCycle(step * FINE_STEP_SIZE);
-      delay(FINE_STEP_DELAY);
+      remaining_sleep_micros = FINE_STEP_DELAY;
     };
     break;
   case MODE_HOLD_BOTTOM:
@@ -154,7 +208,7 @@ void loop() {
       signs[0]->disable();
       // Blank.
       pwmTimer.setDutyCycle(0);
-      delay(HOLD_BOTTOM_DELAY);
+      remaining_sleep_micros = HOLD_BOTTOM_DELAY;
       step = 0;
       mode = MODE_COARSE; // Back to beginning of cycle.
     };
@@ -172,4 +226,9 @@ void loop() {
     mode = 0;
     step = 0;
   }
+
+  // At the end of each loop iteration, sleep until this iteration is LOOP_MICROS long.
+  // We then continue to do poll-only iterations of LOOP_MICROS until remaining_sleep_micros
+  // is zero, at which point we can advance to the next state.
+  sleep_loop_increment(loop_start_micros);
 }
