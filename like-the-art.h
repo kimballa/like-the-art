@@ -13,6 +13,7 @@
 #include <vector>
 
 #include <I2CParallel.h>
+#include <Adafruit_NeoPixel.h>
 #include <dbg.h>
 
 using namespace std;
@@ -36,5 +37,12 @@ enum Effect {
                      // Only valid for sentences with 'ART' in them.
 
 };
+
+/**
+ * Pack r/g/b channels for a neopixel into a 32-bit word.
+ */
+inline static constexpr uint32_t neoPixelColor(uint8_t r, uint8_t g, uint8_t b) {
+  return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+}
 
 #endif /* _LIKE_THE_ART_H */

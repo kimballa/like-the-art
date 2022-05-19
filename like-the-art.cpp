@@ -1,9 +1,16 @@
 // (c) Copyright 2022 Aaron Kimball
 //
 // Operates on the Adafruit Feather M4 -- ATSAMD51 @ 120 MHz.
-// Output a series of PWM waveforms on pin D10 (PA20) via TCC0.
+// Output a series of PWM waveforms on pin D6 (PA18) via TCC0.
 
 #include "like-the-art.h"
+
+// Value between 0--255 controlling how bright the onboard NeoPixel is. (255=max)
+constexpr unsigned int NEOPIXEL_BRIGHTNESS = 64;
+constexpr uint32_t neopx_color_standard = neoPixelColor(0, 255, 0); // green in std mode.
+constexpr uint32_t neopx_color_debug = neoPixelColor(255, 0, 0); // red in debug mode.
+constexpr uint32_t neopx_color_idle = neoPixelColor(0, 0, 255); // blue while waiting for dark
+
 
 // PWM is on D6 -- PA18, altsel G (TCC0/WO[6]; channel 0)
 constexpr unsigned int PORT_GROUP = 0; // 0 = PORTA
@@ -26,6 +33,9 @@ constexpr unsigned int COARSE_STEP_SIZE = PWM_FREQ / NUM_STEPS_COARSE;
 constexpr unsigned int FINE_STEP_SIZE = PWM_FREQ / NUM_STEPS_FINE;
 
 PwmTimer pwmTimer(PORT_GROUP, PORT_PIN, PORT_FN, TCC, PWM_CHANNEL, PWM_FREQ, DEFAULT_PWM_PRESCALER);
+
+// Integrated neopixel on D8.
+Adafruit_NeoPixel neoPixel(1, 8, NEO_GRB | NEO_KHZ800);
 
 // I2C is connected to 3 PCF8574N's, on channel 0x20, 0x21, and 0x22.
 I2CParallel parallelBank0;
@@ -60,6 +70,13 @@ void buttonBankISR() {
 
 void setup() {
   DBGSETUP();
+
+  // Set up neopixel
+  neoPixel.begin();
+  neoPixel.clear(); // start with pixel turned off
+  neoPixel.setPixelColor(0, neopx_color_idle);
+  neoPixel.setBrightness(NEOPIXEL_BRIGHTNESS);
+  neoPixel.show();
 
   // Set up PWM on PORT_GROUP:PORT_PIN via TCC0.
   pwmTimer.setupTcc();
