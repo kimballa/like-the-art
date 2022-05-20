@@ -5,8 +5,8 @@
 
 #define DEBUG
 #define DBG_STD_STRING
-//#define DBG_WAIT_FOR_CONNECT
-//#define DBG_START_PAUSED
+#define DBG_WAIT_FOR_CONNECT
+#define DBG_START_PAUSED
 
 #include <Arduino.h>
 #include <string>
@@ -23,6 +23,8 @@ using namespace std;
 #include "sentence.h"
 #include "buttons.h"
 #include "debugState.h"
+#include "smarteeprom.h"
+#include "saveconfig.h"
 
 enum Effect {
   EF_APPEAR,         // Just turn on the words and hold them there.

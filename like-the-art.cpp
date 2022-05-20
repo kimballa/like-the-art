@@ -88,6 +88,8 @@ static inline void updateNeoPixel() {
 void setup() {
   DBGSETUP();
 
+  programFuses(1, 0); // sblk=1, psz=0 => 512 byte EEPROM.
+
   // Set up neopixel
   neoPixel.begin();
   neoPixel.clear(); // start with pixel turned off
