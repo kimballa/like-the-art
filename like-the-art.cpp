@@ -11,6 +11,8 @@ constexpr uint32_t neopx_color_running = neoPixelColor(0, 255, 0); // green in s
 constexpr uint32_t neopx_color_debug = neoPixelColor(255, 0, 0); // red in debug mode.
 constexpr uint32_t neopx_color_wait = neoPixelColor(0, 0, 255); // blue while waiting for dark
 
+// DARK sensor is on A4 / D18.
+constexpr uint8_t DARK_SENSOR_PIN = 18;
 
 // PWM is on D6 -- PA18, altsel G (TCC0/WO[6]; channel 0)
 constexpr unsigned int PORT_GROUP = 0; // 0 = PORTA
@@ -103,8 +105,42 @@ void setup() {
 
   setupButtons();
 
+  pinMode(DARK_SENSOR_PIN, INPUT);
+
   // Define signs and map them to I/O channels.
   setupSigns(parallelBank0, parallelBank1);
+}
+
+// We want the sensor to be stable for a full second before changing state.
+static constexpr unsigned int DARK_SENSOR_DEBOUNCE_MILLIS = 1000;
+
+static unsigned int lastDarkSensorChangeTime = 0;
+static uint8_t prevDark = 0;
+
+/**
+ * Poll the DARK sensor pin. If DARK=1 then it's dark out and we can display the magic.
+ * If DARK=0 then it's light out and we should be in idle mode.
+ * n.b. that if we're in debug mode, the dark sensor should not cause a state transition;
+ * we stay in debug mode day or night.
+ */
+static void pollDarkSensor() {
+  uint8_t isDark = digitalRead(DARK_SENSOR_PIN);
+  if (isDark != prevDark) {
+    lastDarkSensorChangeTime = millis();
+    prevDark = isDark;
+  }
+
+  unsigned int sensorStabilityTime = millis() - lastDarkSensorChangeTime;
+  bool sensorIsStable = sensorStabilityTime >= DARK_SENSOR_DEBOUNCE_MILLIS;
+
+  if (sensorIsStable && isDark && macroState == MS_WAITING) {
+    // Time to start the show.
+    macroState = MS_RUNNING;
+  } else if (sensorIsStable && !isDark && macroState == MS_RUNNING) {
+    // The sun has found us; pack up for the day.
+    macroState = MS_WAITING;
+    // TODO(aaron): Put the ATSAMD51 to sleep for a while?
+  }
 }
 
 /**
@@ -232,7 +268,7 @@ void loop() {
 
   // Poll buttons and dark sensor every loop.
   pollButtons();
-  // TODO(aaron): Poll the dark sensor.
+  pollDarkSensor();
 
   updateNeoPixel(); // Display current macroState on NeoPixel.
 

@@ -37,7 +37,7 @@ enum Effect {
                      // word...
 
 // TODO(aaron): These are effectively layered effects that should be possible to 'or' on top of
-// the preceeding effects. 
+// the preceeding effects.
   EF_FRITZING_ART,   // Like GLOW, but the word "ART" zaps in and out randomly, like neon on the fritz.
                      // Only valid for sentences with 'ART' in them.
   EF_FRITZING_DONT,  // Like FRITZING_ART, but the word "DON'T" is what's zapping in and out.

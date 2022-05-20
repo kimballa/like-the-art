@@ -2,7 +2,7 @@
 
 #include "like-the-art.h"
 
-static constexpr uint8_t BTN0_INPUT = 11; // Button 0 is on D11.
+static constexpr uint8_t BTN0_PIN = 11; // Button 0 is on D11.
 
 // PCF8574N on channel 0x22 reads buttons 1--8.
 static I2CParallel buttonBank;
@@ -19,7 +19,7 @@ void setupButtons() {
   buttonBank.init(   2 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
   buttonBank.enableInputs(0xFF); // all 8 channels of button bank are inputs.
 
-  pinMode(BTN0_INPUT, INPUT_PULLUP);
+  pinMode(BTN0_PIN, INPUT_PULLUP);
 
   // Allocate the button state and dispatch handlers.
   buttons.clear();
@@ -44,7 +44,7 @@ void setupButtons() {
  */
 void pollButtons() {
   // Button 0 is connected directly to a digital gpio input
-  buttons[0].update(digitalRead(BTN0_INPUT));
+  buttons[0].update(digitalRead(BTN0_PIN));
 
   // Buttons 1..8 are connected thru the PCF8574 and are read as a byte.
   uint8_t btnBankState = buttonBank.read();
