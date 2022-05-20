@@ -113,9 +113,13 @@ void setup() {
 
 // We want the sensor to be stable for a full second before changing state.
 static constexpr unsigned int DARK_SENSOR_DEBOUNCE_MILLIS = 1000;
-
 static unsigned int lastDarkSensorChangeTime = 0;
-static uint8_t prevDark = 0;
+
+// After the sensor triggers a state change, we commit to that state for 60s.
+static constexpr unsigned int DARK_SENSOR_STATE_DELAY_MILLIS = 60000;
+static unsigned int lastDarkStateChangeTime = 0;
+
+static uint8_t prevDark = 0; // prior polled value of the gpio pin.
 
 /**
  * Poll the DARK sensor pin. If DARK=1 then it's dark out and we can display the magic.
@@ -125,21 +129,34 @@ static uint8_t prevDark = 0;
  */
 static void pollDarkSensor() {
   uint8_t isDark = digitalRead(DARK_SENSOR_PIN);
+  unsigned int now = millis();
+
   if (isDark != prevDark) {
-    lastDarkSensorChangeTime = millis();
+    lastDarkSensorChangeTime = now;
     prevDark = isDark;
   }
 
-  unsigned int sensorStabilityTime = millis() - lastDarkSensorChangeTime;
+  // Check that the sensor value has been stable (debounced) for long enough.
+  unsigned int sensorStabilityTime = now - lastDarkSensorChangeTime;
   bool sensorIsStable = sensorStabilityTime >= DARK_SENSOR_DEBOUNCE_MILLIS;
 
-  if (sensorIsStable && isDark && macroState == MS_WAITING) {
+  // Schmitt-trigger for state changes: even on a stable sensor, don't change state
+  // back and forth particularly quickly; commit to a new state for a reasonable dwell time.
+  unsigned int stateDuration = now - lastDarkStateChangeTime;
+  bool stateDwellLongEnough = stateDuration > DARK_SENSOR_STATE_DELAY_MILLIS;
+
+  // In order to change state, we need a stable sensor AND enough time in the prior state.
+  bool changeAllowed = sensorIsStable && stateDwellLongEnough;
+
+  if (changeAllowed && isDark && macroState == MS_WAITING) {
     // Time to start the show.
     macroState = MS_RUNNING;
-  } else if (sensorIsStable && !isDark && macroState == MS_RUNNING) {
+    lastDarkStateChangeTime = now;
+  } else if (changeAllowed && !isDark && macroState == MS_RUNNING) {
     // The sun has found us; pack up for the day.
     macroState = MS_WAITING;
-    // TODO(aaron): Put the ATSAMD51 to sleep for a while?
+    lastDarkStateChangeTime = now;
+    // TODO(aaron): Put the ATSAMD51 to sleep for a while? (Don't forget to shut off the lights 1st)
   }
 }
 
