@@ -10,6 +10,9 @@
 #include <dbg.h>
 #include "smarteeprom.h"
 
+// Pointer to the start of the SmartEEPROM area allocated.
+volatile uint32_t *const ptrEEPROM = (volatile uint32_t *)SEEPROM_ADDR;
+
 // 8x32 bits stored in "user page" fuse bits.
 constexpr unsigned int nFuseUserPageWords = 8;
 // The user page area is actually 512 bytes; the first 32 bytes contain system
@@ -54,7 +57,7 @@ constexpr unsigned int PSZ_BIT_POS = 0x4;
  *      32968           5           6
  *      65536           10          7
  ******************************************************************************/
-void programFuses(uint8_t sblk, uint8_t psz) {
+void programEEPROMFuses(uint8_t sblk, uint8_t psz) {
   uint32_t fuseWords[nFuseUserPageWords];
 
   // Read the current fuse values
@@ -115,3 +118,72 @@ void programFuses(uint8_t sblk, uint8_t psz) {
   DBGPRINT("Data write complete. Rebooting...");
   doReboot();
 }
+
+/**
+ * Read 'size' bytes of data at 'offset' bytes into the EEPROM region and copy it into dataOut.
+ * dataOut must not be null.
+ * size must be non-zero and 32-bit aligned.
+ * offset must be 32-bit aligned.
+ *
+ * Returns 0 on success, non-zero error code otherwise.
+ */
+int readEEPROM(unsigned int offset, void *dataOut, size_t size) {
+  if (NULL == dataOut) {
+    return EEPROM_INVALID_ARG;
+  }
+
+  if (size == 0 || (size % 4) != 0) {
+    return EEPROM_INVALID_ARG; // Require 32-bit aligned reads.
+  }
+
+  if ((offset % 4) != 0) {
+    return EEPROM_INVALID_ARG; // Alignment.
+  }
+
+  const volatile uint32_t *readCursor = ptrEEPROM;
+  uint32_t *writeCursor = (uint32_t *)dataOut;
+  size_t copied = 0;
+  while (copied < size) {
+    *writeCursor++ = *readCursor++;
+    copied += sizeof(uint32_t);
+  }
+
+  return EEPROM_SUCCESS;
+}
+
+/**
+ * Write 'size' bytes of data at 'offset' bytes in the EEPROM region, copied from data.
+ * data must not be null.
+ * size must be non-zero and 32-bit aligned.
+ * offset must be 32-bit aligned.
+ *
+ * Returns 0 on success, non-zero error code otherwise.
+ */
+int writeEEPROM(unsigned int offset, const void *data, size_t size) {
+  if (NULL == data) {
+    return EEPROM_INVALID_ARG;
+  }
+
+  if (size == 0 || (size % 4) != 0) {
+    return EEPROM_INVALID_ARG; // Require 32-bit aligned writes.
+  }
+
+  if ((offset % 4) != 0) {
+    return EEPROM_INVALID_ARG; // Alignment.
+  }
+
+  // Wait for hardware to be ready...
+  while (NVMCTRL->SEESTAT.bit.BUSY);
+
+  // Copy data to EEPROM.
+  volatile uint32_t *writeCursor = ptrEEPROM;
+  const uint32_t *readCursor = (const uint32_t *)data;
+  size_t copied = 0;
+  while (copied < size) {
+    *writeCursor++ = *readCursor++;
+    copied += sizeof(uint32_t);
+  }
+
+  return EEPROM_SUCCESS;
+}
+

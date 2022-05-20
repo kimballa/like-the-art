@@ -88,7 +88,10 @@ static inline void updateNeoPixel() {
 void setup() {
   DBGSETUP();
 
-  programFuses(1, 0); // sblk=1, psz=0 => 512 byte EEPROM.
+  // If we don't already have SmartEEPROM space configured, reconfigure
+  // the NVM controller to allow that. (Will trigger instant reset.)
+  // If the fuses are already correct, this will do nothing and continue.
+  programEEPROMFuses(1, 0); // sblk=1, psz=0 => 512 byte EEPROM.
 
   // Set up neopixel
   neoPixel.begin();
@@ -96,6 +99,30 @@ void setup() {
   neoPixel.setBrightness(NEOPIXEL_BRIGHTNESS);
   updateNeoPixel();
   neoPixel.show();
+
+  // Load field configuration, which specifies the max brightness pwm level to use.
+  if (loadFieldConfig(&fieldConfig) == FIELD_CONF_EMPTY) {
+    // No field configuration initialized. Use defaults.
+    initDefaultFieldConfig();
+  }
+
+  switch (fieldConfig.maxBrightness) {
+  case BRIGHTNESS_FULL:
+    DBGPRINT("Brightness: Full (100%)");
+    break;
+  case BRIGHTNESS_NORMAL:
+    DBGPRINT("Brightness: Normal (70%) [default]");
+    break;
+  case BRIGHTNESS_POWER_SAVE_1:
+    DBGPRINT("Brightness: Powersave 1 (60%)");
+    break;
+  case BRIGHTNESS_POWER_SAVE_2:
+    DBGPRINT("Brightness: Powersave 2 (50%)");
+    break;
+  default:
+    DBGPRINT("ERROR: unknown brightness level configured.");
+    break;
+  }
 
   // Set up PWM on PORT_GROUP:PORT_PIN via TCC0.
   pwmTimer.setupTcc();
