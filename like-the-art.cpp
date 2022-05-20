@@ -7,9 +7,9 @@
 
 // Value between 0--255 controlling how bright the onboard NeoPixel is. (255=max)
 constexpr unsigned int NEOPIXEL_BRIGHTNESS = 64;
-constexpr uint32_t neopx_color_standard = neoPixelColor(0, 255, 0); // green in std mode.
+constexpr uint32_t neopx_color_running = neoPixelColor(0, 255, 0); // green in std mode.
 constexpr uint32_t neopx_color_debug = neoPixelColor(255, 0, 0); // red in debug mode.
-constexpr uint32_t neopx_color_idle = neoPixelColor(0, 0, 255); // blue while waiting for dark
+constexpr uint32_t neopx_color_wait = neoPixelColor(0, 0, 255); // blue while waiting for dark
 
 
 // PWM is on D6 -- PA18, altsel G (TCC0/WO[6]; channel 0)
@@ -47,9 +47,9 @@ PwmTimer pwmTimer(PORT_GROUP, PORT_PIN, PORT_FN, TCC, PWM_CHANNEL, PWM_FREQ, DEF
 Adafruit_NeoPixel neoPixel(1, 8, NEO_GRB | NEO_KHZ800);
 
 // I2C is connected to 3 PCF8574N's, on channel 0x20, 0x21, and 0x22.
+// Two declared here for interacting with LEDs. The buttonBank is declared in button.cpp.
 I2CParallel parallelBank0;
 I2CParallel parallelBank1;
-I2CParallel buttonBank;
 
 // State machine that drives this skech is based on cycling through the following modes,
 // where we then take a number of PWM-varying actions that cycle 'step' through different ranges
@@ -66,15 +66,21 @@ static int mode = MODE_COARSE;
 
 static int step = 0;
 
-// TODO(aaron): Move button logic out to a different cpp module.
-static uint8_t lastButtonState = 0xFF;
-void buttonBankISR() {
-  uint8_t newButtonState = buttonBank.read();
-  if (newButtonState != lastButtonState) {
-    DBGPRINT("Button state change");
-    DBGPRINT(newButtonState);
-    lastButtonState = newButtonState;
-  }
+MacroState macroState = MS_RUNNING;
+
+// NeoPixel color reflects current MacroState.
+static inline void updateNeoPixel() {
+  switch(macroState) {
+  case MS_RUNNING:
+    neoPixel.setPixelColor(0, neopx_color_running);
+    break;
+  case MS_DEBUG:
+    neoPixel.setPixelColor(0, neopx_color_debug);
+    break;
+  case MS_WAITING:
+    neoPixel.setPixelColor(0, neopx_color_wait);
+    break;
+  };
 }
 
 void setup() {
@@ -83,8 +89,8 @@ void setup() {
   // Set up neopixel
   neoPixel.begin();
   neoPixel.clear(); // start with pixel turned off
-  neoPixel.setPixelColor(0, neopx_color_idle);
   neoPixel.setBrightness(NEOPIXEL_BRIGHTNESS);
+  updateNeoPixel();
   neoPixel.show();
 
   // Set up PWM on PORT_GROUP:PORT_PIN via TCC0.
@@ -95,9 +101,7 @@ void setup() {
   parallelBank0.init(0 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
   parallelBank1.init(1 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
 
-  buttonBank.init(   2 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
-  buttonBank.enableInputs(0xFF); // all 8 channels of button bank are inputs.
-  buttonBank.initInterrupt(9, buttonBankISR);
+  setupButtons();
 
   // Define signs and map them to I/O channels.
   setupSigns(parallelBank0, parallelBank1);
@@ -136,20 +140,15 @@ static inline void sleep_loop_increment(unsigned long loop_start_micros) {
   }
 }
 
-void loop() {
-  unsigned int loop_start_micros = micros();
-
-  // Poll buttons and dark sensor every loop.
-  DBGPRINT(buttonBank.read());
-
+/** Main loop body when we're in the MS_RUNNING macro state. */
+static void loopStateRunning() {
   if (remaining_sleep_micros > 0) {
     // Do not advance the state machine. Our existing sleep debt remains to be paid off.
-    sleep_loop_increment(loop_start_micros);
     return;
   }
 
   // Advance to next state.
-
+  //
 /*
   DBGPRINT("mode:");
   DBGPRINT(mode);
@@ -226,9 +225,41 @@ void loop() {
     mode = 0;
     step = 0;
   }
+}
+
+void loop() {
+  unsigned int loop_start_micros = micros();
+
+  // Poll buttons and dark sensor every loop.
+  pollButtons();
+  // TODO(aaron): Poll the dark sensor.
+
+  updateNeoPixel(); // Display current macroState on NeoPixel.
+
+  // Run the macro-state-specific loop body.
+  switch(macroState) {
+  case MS_RUNNING:
+    loopStateRunning();
+    break;
+  case MS_DEBUG:
+    loopStateDebug();
+    break;
+  case MS_WAITING:
+    // Definitionally nothing to do in the waiting state...
+    // TODO - instead of loops of short-sleep & polling the dark sensor every 10ms,
+    // we should put the system into a lower-power mode and query every minute or so
+    // or wait for an interrupt to wake us.
+    break;
+  default:
+    DBGPRINT("ERROR -- unknown MacroState:");
+    DBGPRINT(macroState);
+    DBGPRINT("Reverting to running state");
+    macroState = MS_RUNNING;
+  }
 
   // At the end of each loop iteration, sleep until this iteration is LOOP_MICROS long.
-  // We then continue to do poll-only iterations of LOOP_MICROS until remaining_sleep_micros
-  // is zero, at which point we can advance to the next state.
+  // If we are in the RUNNING state, we then continue to do sensor-poll-only iterations of
+  // LOOP_MICROS until remaining_sleep_micros is zero, at which point we can advance to the
+  // next state.
   sleep_loop_increment(loop_start_micros);
 }

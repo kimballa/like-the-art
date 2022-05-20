@@ -21,6 +21,8 @@ using namespace std;
 #include "samd51pwm.h"
 #include "sign.h"
 #include "sentence.h"
+#include "buttons.h"
+#include "debugState.h"
 
 enum Effect {
   EF_APPEAR,         // Just turn on the words and hold them there.
@@ -33,10 +35,25 @@ enum Effect {
   EF_SLIDE_TO_END,   // Make a light pulse "zip" through all the words until reaching the last
                      // word in the phrase, then that word stays on. Then zip the 2nd-to-last
                      // word...
+
+// TODO(aaron): These are effectively layered effects that should be possible to 'or' on top of
+// the preceeding effects. 
   EF_FRITZING_ART,   // Like GLOW, but the word "ART" zaps in and out randomly, like neon on the fritz.
                      // Only valid for sentences with 'ART' in them.
-
+  EF_FRITZING_DONT,  // Like FRITZING_ART, but the word "DON'T" is what's zapping in and out.
+  EF_ALT_LOVE_HATE,  // Alternate lighting the "LOVE" and "HATE" words.
 };
+
+// The top-level state machine of the system: it's either running, waiting for nightfall, or in
+// debug mode. Other state machines controlling LED signs, etc. are only valid in certain macro
+// states.
+enum MacroState {
+  MS_RUNNING,       // Default "go" state
+  MS_DEBUG,         // "Debug" mode entered for manual operator control.
+  MS_WAITING,       // Waiting for nightfall; idle system.
+};
+
+extern MacroState macroState;
 
 /**
  * Pack r/g/b channels for a neopixel into a 32-bit word.
