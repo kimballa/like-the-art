@@ -9,12 +9,15 @@ a collection of buttons on a controller box.
 
 ## LED Neon Power
 
-Power is distributed through a collection of IRBL8721 Power MOSFETs. We
+Power is distributed through a collection of power MOSFETs. We
 can activate them through our I/O which is a combination of GPIO and 8-bit
-parallel busses (PCF8574) on I2C. These signals are AND'd (by a SN75374, which drives
-the MOSFETs) with a PWM signal we also control for brightness and effects control.
-
-The '374 is negative logic; we drive the input low to illuminate the LEDs.
+parallel busses (PCF8574) on I2C. Control signals are NAND'd together with a
+PWM signal we also control for brightness and effects control; that is fed into
+a 75374 low-side driver that converts a logic-level signal into a high-voltage gate
+signal for the power MOSFETs. The '374 is negative logic; we drive that input
+low to illuminate the LEDs. However, as we have a NAND layer in front of it, these
+cancel out so a control signal should be high to light an LED sign and that sign is lit
+only when the PWM duty cycle is also high.
 
 ## Ambient operation
 
@@ -37,7 +40,7 @@ messages for the next 15 seconds before reverting to random.
 With low probability, every button press may scramble which buttons map to which operation
 (message select or effect select).
 
-## Debug mode
+## Admin mode
 
 The buttons form a grid much like a telephone number pad:
 
@@ -48,32 +51,35 @@ The buttons form a grid much like a telephone number pad:
 ```
 
 Recent button inputs are recorded in a shift register. When an access code is entered, the
-device switches into debug mode.
+device switches into admin mode.
 
-The first LED sign will begin blinking when debug mode is active.
+The first LED sign will begin blinking when admin mode is active.
 
-In this mode, the buttons have the following operations:
+In this mode, the buttons choose between the following menu of options:
 
-* 1 - Full sign test. Light up each sign in series. Repeats indefinitely until a new
+* 1 - Full sign test. Auto Light up each sign in series. Repeats indefinitely until a new
   operation is chosen.
-* 2 - Light up prev sign. Don't auto-progress.
-* 3 - Light up next sign. Don't auto-progress.
-* 4 - Use next available effect.
-* 5 - Light up prev sentence/message.
-* 6 - Light up prev sentence/message.
-* 7 - Hold 1 second to exit debug mode. The first 3 signs flash 3 times and then
-  debug mode ends.
-* 8 - Toggle between three max brightness levels for power management: 50--65--75%.
-  One to three signs will illuminate and blink quickly, indicating the chosen brightness level.
-* 9 - Hold 3 seconds to reset system via WDT
+* 2 - Light up signs one-by-one; don't auto-progress. Use buttons 4 and 6 to go back/forward. Use
+  button 9 to return to the top level menu.
+* 3 - Change active effect. A sample message is lit while you choose the effect. Use 4 and 6 to
+  scroll back/forward. 9 returns to the top menu.
+* 4 - Light up sentences one-by-one; don't auto-progress. 4/6/9 as before.
+* 5 - Choose the brightness level. Use buttons 1--4 where 1 is super-low, 2 is low, 3 is standard,
+  and 4 is high-intensity brightness (50, 60, 75, 100% full power respectively).
+  One to four signs will illuminate and blink quickly, indicating the chosen brightness level.
+  9 to return to top menu.
+* 6 - No function.
+* 7 - Hold 1 second to exit admin mode. The first 3 signs flash 3 times and then
+  admin mode ends.
+* 8 - No function.
+* 9 - Hold 3 seconds to completely reset system.
 
 ## Power level configuration
 
 The LED brightness (and power use) is controlled by the max PWM duty cycle we enable.
 
-This can be changed in debug mode.
+This can be changed in admin mode.
 
-We persist this setting across reboots in the SmartEEPROM.
+We persist this setting across reboots in the SmartEEPROM. See `lib/smarteeprom.cpp` for
+low-level implementation; `saveconfig.cpp` for application-specific layer.
 
-See https://community.atmel.com/forum/how-use-flash-atsamd51-j-20 for an example
-of how to use the SmartEEPROM.

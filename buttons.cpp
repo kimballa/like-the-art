@@ -9,7 +9,7 @@ static I2CParallel buttonBank;
 
 // Keep a rolling history buffer of button presses
 static vector<uint8_t> buttonPresses;
-static vector<uint8_t> debugCodeSequence = { 1, 0, 4, 8, 5, 1, 5, 6, 6, 3 };
+static vector<uint8_t> adminCodeSequence = { 1, 0, 4, 8, 5, 1, 5, 6, 6, 3 };
 
 // All 9 Button instances.
 static vector<Button> buttons;
@@ -56,7 +56,7 @@ void pollButtons() {
 
 /**
  * Record a rolling history of the most recent button presses.
- * If the user has entered the sequence that enables debug mode, switch to that
+ * If the user has entered the sequence that enables admin mode, switch to that
  * macro state.
  */
 static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
@@ -66,29 +66,29 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
 
   DBGPRINT("Registered keypress: " + to_string(btnId));
 
-  if (macroState == MS_DEBUG) {
-    // Don't track the rolling history when we're already in debug mode;
-    // we don't want to accidentally reset to the beginning of the debug mode
-    // state machine if we're poking things deeper into the debug state machine
+  if (macroState == MS_ADMIN) {
+    // Don't track the rolling history when we're already in admin mode;
+    // we don't want to accidentally reset to the beginning of the admin mode
+    // state machine if we're poking things deeper into the admin state machine
     // in exactly the wrong way.
     return;
   }
 
   // Record the latest button press
   buttonPresses.push_back(btnId);
-  // But don't track a history longer than the debug access code sequence.
-  int deleteCount = buttonPresses.size() - debugCodeSequence.size();
+  // But don't track a history longer than the admin access code sequence.
+  int deleteCount = buttonPresses.size() - adminCodeSequence.size();
   if (deleteCount > 0) {
     buttonPresses.erase(buttonPresses.begin(), buttonPresses.begin() + deleteCount);
   }
 
-  if (buttonPresses == debugCodeSequence) {
-    // The user has keyed in the debug access code sequence.
-    // Switch to debug macro state.
-    macroState = MS_DEBUG;
-    debugState = DS_INITIALIZING;
+  if (buttonPresses == adminCodeSequence) {
+    // The user has keyed in the admin access code sequence.
+    // Switch to admin macro state.
+    macroState = MS_ADMIN;
+    adminState = AS_INITIALIZING;
     buttonPresses.clear();
-    DBGPRINT(">>>> Entering DEBUG MacroState <<<<");
+    DBGPRINT(">>>> Entering ADMIN MacroState <<<<");
   }
 }
 

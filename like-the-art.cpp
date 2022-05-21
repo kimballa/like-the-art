@@ -8,7 +8,7 @@
 // Value between 0--255 controlling how bright the onboard NeoPixel is. (255=max)
 constexpr unsigned int NEOPIXEL_BRIGHTNESS = 64;
 constexpr uint32_t neopx_color_running = neoPixelColor(0, 255, 0); // green in std mode.
-constexpr uint32_t neopx_color_debug = neoPixelColor(255, 0, 0); // red in debug mode.
+constexpr uint32_t neopx_color_admin = neoPixelColor(255, 0, 0); // red in admin mode.
 constexpr uint32_t neopx_color_wait = neoPixelColor(0, 0, 255); // blue while waiting for dark
 
 // DARK sensor is on A4 / D18.
@@ -76,8 +76,8 @@ static inline void updateNeoPixel() {
   case MS_RUNNING:
     neoPixel.setPixelColor(0, neopx_color_running);
     break;
-  case MS_DEBUG:
-    neoPixel.setPixelColor(0, neopx_color_debug);
+  case MS_ADMIN:
+    neoPixel.setPixelColor(0, neopx_color_admin);
     break;
   case MS_WAITING:
     neoPixel.setPixelColor(0, neopx_color_wait);
@@ -157,8 +157,8 @@ static uint8_t prevDark = 0; // prior polled value of the gpio pin.
 /**
  * Poll the DARK sensor pin. If DARK=1 then it's dark out and we can display the magic.
  * If DARK=0 then it's light out and we should be in idle mode.
- * n.b. that if we're in debug mode, the dark sensor should not cause a state transition;
- * we stay in debug mode day or night.
+ * n.b. that if we're in admin mode, the dark sensor should not cause a state transition;
+ * we stay in admin mode day or night.
  */
 static void pollDarkSensor() {
   uint8_t isDark = digitalRead(DARK_SENSOR_PIN);
@@ -327,8 +327,8 @@ void loop() {
   case MS_RUNNING:
     loopStateRunning();
     break;
-  case MS_DEBUG:
-    loopStateDebug();
+  case MS_ADMIN:
+    loopStateAdmin();
     break;
   case MS_WAITING:
     // Definitionally nothing to do in the waiting state...

@@ -23,7 +23,7 @@ using namespace std;
 #include "sign.h"
 #include "sentence.h"
 #include "buttons.h"
-#include "debugState.h"
+#include "adminState.h"
 #include "saveconfig.h"
 
 enum Effect {
@@ -47,11 +47,11 @@ enum Effect {
 };
 
 // The top-level state machine of the system: it's either running, waiting for nightfall, or in
-// debug mode. Other state machines controlling LED signs, etc. are only valid in certain macro
+// admin mode. Other state machines controlling LED signs, etc. are only valid in certain macro
 // states.
 enum MacroState {
   MS_RUNNING,       // Default "go" state
-  MS_DEBUG,         // "Debug" mode entered for manual operator control.
+  MS_ADMIN,         // "Admin" mode entered for manual operator control.
   MS_WAITING,       // Waiting for nightfall; idle system.
 };
 
