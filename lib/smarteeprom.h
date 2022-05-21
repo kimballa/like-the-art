@@ -8,6 +8,9 @@
 #  error This library only works on the ATSAMD51 architecture.
 #endif
 
+#include <Arduino.h>
+#include <samd.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus

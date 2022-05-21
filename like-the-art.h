@@ -18,12 +18,12 @@
 
 using namespace std;
 
-#include "samd51pwm.h"
+#include "lib/samd51pwm.h"
+#include "lib/smarteeprom.h"
 #include "sign.h"
 #include "sentence.h"
 #include "buttons.h"
 #include "debugState.h"
-#include "smarteeprom.h"
 #include "saveconfig.h"
 
 enum Effect {

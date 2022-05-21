@@ -4,9 +4,6 @@
 // See SAM D5x datasheet section 25.6.8 for SmartEEPROM description.
 // Datasheet section 9.4 describes the user row programming.
 
-#include <Arduino.h>
-#include <samd.h>
-
 #include <dbg.h>
 #include "smarteeprom.h"
 

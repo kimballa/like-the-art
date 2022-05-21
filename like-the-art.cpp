@@ -106,7 +106,7 @@ void setup() {
     // No field configuration initialized. Use defaults.
     int initConfigRet = initDefaultFieldConfig();
     if (initConfigRet != EEPROM_SUCCESS) {
-      DBGPRINT("Warning: got error code when initializing field config:", initConfigRet);
+      DBGPRINTI("Warning: got error code when initializing field config:", initConfigRet);
     }
   }
 
