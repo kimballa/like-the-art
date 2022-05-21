@@ -92,6 +92,7 @@ void setup() {
   // the NVM controller to allow that. (Will trigger instant reset.)
   // If the fuses are already correct, this will do nothing and continue.
   programEEPROMFuses(1, 0); // sblk=1, psz=0 => 512 byte EEPROM.
+  setEEPROMCommitMode(true); // Require explicit commit for EEPROM data changes.
 
   // Set up neopixel
   neoPixel.begin();
@@ -103,7 +104,10 @@ void setup() {
   // Load field configuration, which specifies the max brightness pwm level to use.
   if (loadFieldConfig(&fieldConfig) == FIELD_CONF_EMPTY) {
     // No field configuration initialized. Use defaults.
-    initDefaultFieldConfig();
+    int initConfigRet = initDefaultFieldConfig();
+    if (initConfigRet != EEPROM_SUCCESS) {
+      DBGPRINT("Warning: got error code when initializing field config:", initConfigRet);
+    }
   }
 
   switch (fieldConfig.maxBrightness) {

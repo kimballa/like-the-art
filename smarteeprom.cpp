@@ -140,6 +140,9 @@ int readEEPROM(unsigned int offset, void *dataOut, size_t size) {
     return EEPROM_INVALID_ARG; // Alignment.
   }
 
+  // Wait for hardware to be ready...
+  while (NVMCTRL->SEESTAT.bit.BUSY);
+
   const volatile uint32_t *readCursor = ptrEEPROM;
   uint32_t *writeCursor = (uint32_t *)dataOut;
   size_t copied = 0;
@@ -182,6 +185,46 @@ int writeEEPROM(unsigned int offset, const void *data, size_t size) {
   while (copied < size) {
     *writeCursor++ = *readCursor++;
     copied += sizeof(uint32_t);
+  }
+
+  return EEPROM_SUCCESS;
+}
+
+/**
+ * If useExplicitCommit is true, you must explicitly call commitEEPROM() after making writes.
+ * Otherwise it auto-commits.
+ */
+void setEEPROMCommitMode(bool useExplicitCommit) {
+  DBGPRINTI("Setting EEPROM commit mode; useExplicitCommit =", useExplicitCommit);
+  NVMCTRL->SEECFG.bit.WMODE = useExplicitCommit ? 1 : 0;
+}
+
+int commitEEPROM() {
+  DBGPRINT("Committing EEPROM...");
+
+  if (!NVMCTRL->SEESTAT.bit.LOAD) {
+    DBGPRINT("(Nothing to commit)");
+    return EEPROM_SUCCESS;
+  }
+
+  // Wait for hardware to be ready...
+  while (NVMCTRL->SEESTAT.bit.BUSY);
+  waitNVMReady();
+
+  // Issue SEE flush command.
+  NVMCTRL->INTFLAG.bit.DONE = 1; // clear flag.
+  NVMCTRL->CTRLB.reg = NVMCTRL_CTRLB_CMDEX_KEY | NVMCTRL_CTRLB_CMD_SEEFLUSH;
+  while (!NVMCTRL->INTFLAG.bit.DONE);
+  while (!NVMCTRL->INTFLAG.bit.SEEWRC);
+
+  if (NVMCTRL->INTFLAG.bit.SEESOVF) {
+    // We overflowed the smart eeprom area.
+    NVMCTRL->INTFLAG.bit.SEESOVF = 1; // clear the flag.
+    return EEPROM_OVERFLOW;
+  }
+
+  if (NVMCTRL->SEESTAT.bit.LOAD == 1) {
+    return EEPROM_WRITE_FAILED; // Didn't fully commit the data.
   }
 
   return EEPROM_SUCCESS;

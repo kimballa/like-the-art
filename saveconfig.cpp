@@ -45,7 +45,12 @@ int loadFieldConfig(DeviceFieldConfig *configOut) {
 int saveFieldConfig(DeviceFieldConfig *config) {
   DBGPRINT("Writing field configuration...");
   config->validitySignature = PROGRAMMING_SIGNATURE;
-  return writeEEPROM(DATA_EEPROM_OFFSET, config);
+  int ret = writeEEPROM(DATA_EEPROM_OFFSET, config);
+  if (ret != 0) {
+    return ret;
+  }
+
+  return commitEEPROM();
 }
 
 /**
