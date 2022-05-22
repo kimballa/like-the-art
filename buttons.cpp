@@ -12,11 +12,11 @@ static vector<uint8_t> buttonPresses;
 static vector<uint8_t> adminCodeSequence = { 1, 0, 4, 8, 5, 1, 5, 6, 6, 3 };
 
 // All 9 Button instances.
-static vector<Button> buttons;
+vector<Button> buttons;
 
 /** Initial setup of buttons invoked by the setup() method. */
 void setupButtons() {
-  buttonBank.init(   2 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
+  buttonBank.init(2 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
   buttonBank.enableInputs(0xFF); // all 8 channels of button bank are inputs.
 
   pinMode(BTN0_PIN, INPUT_PULLUP);
@@ -31,10 +31,22 @@ void setupButtons() {
   attachStandardButtonHandlers();
 }
 
+/** Attach button handlers for RUNNING/WAITING modes. */
 void attachStandardButtonHandlers() {
   // TODO(aaron): Attach more interesting button handlers to each Button.
   for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
     buttons[i].setHandler(defaultBtnHandler);
+    buttons[i].setDebounceInterval(BTN_DEBOUNCE_MILLIS);
+  }
+}
+
+/**
+ * Attach the empty handler (and default timing) to all buttons.
+ */
+void attachEmptyButtonHandlers() {
+  for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
+    buttons[i].setHandler(emptyBtnHandler);
+    buttons[i].setDebounceInterval(BTN_DEBOUNCE_MILLIS);
   }
 }
 
@@ -97,6 +109,10 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
   }
 }
 
+/** A button handler that does nothing; for states when a given button is unmapped. */
+void emptyBtnHandler(uint8_t btnId, uint8_t btnState) {
+}
+
 /** Default button-press handler that just records history. */
 void defaultBtnHandler(uint8_t btnId, uint8_t btnState) {
   recordButtonHistory(btnId, btnState);
@@ -105,7 +121,7 @@ void defaultBtnHandler(uint8_t btnId, uint8_t btnState) {
 
 Button::Button(uint8_t id, buttonHandler_t handlerFn):
     _id(id), _curState(BTN_OPEN), _priorPoll(BTN_OPEN), _readStartTime(0),
-    _handlerFn(handlerFn) {
+    _debounceInterval(BTN_DEBOUNCE_MILLIS), _handlerFn(handlerFn) {
 
   if (NULL == _handlerFn) {
     _handlerFn = defaultBtnHandler;
@@ -117,13 +133,13 @@ bool Button::update(uint8_t latestPoll) {
 
   if (latestPoll != _priorPoll) {
     // Input has changed since we last polled. Reset debounce timer.
-    _readStartTime = micros();
+    _readStartTime = millis();
   }
 
   // Save reading for next interrogation of update().
   _priorPoll = latestPoll;
 
-  if ((micros() - _readStartTime) > BTN_DEBOUNCE_MICROS) {
+  if ((millis() - _readStartTime) > BTN_DEBOUNCE_MILLIS) {
     // The reading has remained consistent for the debounce interval.
     // It's a legitimate state.
 

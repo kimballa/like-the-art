@@ -110,23 +110,8 @@ void setup() {
     }
   }
 
-  switch (fieldConfig.maxBrightness) {
-  case BRIGHTNESS_FULL:
-    DBGPRINT("Brightness: Full (100%)");
-    break;
-  case BRIGHTNESS_NORMAL:
-    DBGPRINT("Brightness: Normal (70%) [default]");
-    break;
-  case BRIGHTNESS_POWER_SAVE_1:
-    DBGPRINT("Brightness: Powersave 1 (60%)");
-    break;
-  case BRIGHTNESS_POWER_SAVE_2:
-    DBGPRINT("Brightness: Powersave 2 (50%)");
-    break;
-  default:
-    DBGPRINT("ERROR: unknown brightness level configured.");
-    break;
-  }
+  // Print current config'd brightness to dbg console.
+  printCurrentBrightness();
 
   // Set up PWM on PORT_GROUP:PORT_PIN via TCC0.
   pwmTimer.setupTcc();
@@ -136,6 +121,7 @@ void setup() {
   parallelBank0.init(0 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
   parallelBank1.init(1 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
 
+  // Connects button-input I2C and configures Button dispatch handler methods.
   setupButtons();
 
   pinMode(DARK_SENSOR_PIN, INPUT);
@@ -202,7 +188,8 @@ void setMacroStateWaiting() {
   DBGPRINT(">>>> Entering WAITING MacroState <<<<");
   macroState = MS_WAITING;
   attachStandardButtonHandlers();
-  // TODO(aaron): Put the ATSAMD51 to sleep for a while? (Don't forget to shut off the lights 1st)
+  allSignsOff();
+  // TODO(aaron): Put the ATSAMD51 to sleep for a while?
 }
 
 /**

@@ -46,6 +46,8 @@ enum Effect {
   EF_ALT_LOVE_HATE,  // Alternate lighting the "LOVE" and "HATE" words.
 };
 
+constexpr unsigned int NUM_EFFECTS = (unsigned int)(Effect::EF_ALT_LOVE_HATE) + 1;
+
 // The top-level state machine of the system: it's either running, waiting for nightfall, or in
 // admin mode. Other state machines controlling LED signs, etc. are only valid in certain macro
 // states.
@@ -55,12 +57,16 @@ enum MacroState {
   MS_WAITING,       // Waiting for nightfall; idle system.
 };
 
+/** The top-level state. Do not set this directly; call setMacroState{Running|Waiting|Admin}(). */
 extern MacroState macroState;
 
 /** Switch to MS_RUNNING MacroState. */
 extern void setMacroStateRunning();
 /** Switch to MS_WAITING MacroState. */
 extern void setMacroStateWaiting();
+
+/** The global PWM timer. */
+extern PwmTimer pwmTimer;
 
 /**
  * Pack r/g/b channels for a neopixel into a 32-bit word.

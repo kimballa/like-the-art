@@ -63,3 +63,22 @@ int initDefaultFieldConfig() {
   return saveFieldConfig(&fieldConfig);
 }
 
+void printCurrentBrightness() {
+  switch (fieldConfig.maxBrightness) {
+  case BRIGHTNESS_FULL:
+    DBGPRINT("Brightness: Full (100%)");
+    break;
+  case BRIGHTNESS_NORMAL:
+    DBGPRINT("Brightness: Normal (70%) [default]");
+    break;
+  case BRIGHTNESS_POWER_SAVE_1:
+    DBGPRINT("Brightness: Powersave 1 (60%)");
+    break;
+  case BRIGHTNESS_POWER_SAVE_2:
+    DBGPRINT("Brightness: Powersave 2 (50%)");
+    break;
+  default:
+    DBGPRINT("ERROR: unknown brightness level configured.");
+    break;
+  }
+}

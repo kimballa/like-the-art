@@ -30,6 +30,8 @@ extern int loadFieldConfig(DeviceFieldConfig *configOut);
 extern int saveFieldConfig(DeviceFieldConfig *config);
 extern int initDefaultFieldConfig();
 
+extern void printCurrentBrightness();
+
 extern DeviceFieldConfig fieldConfig;
 
 #endif

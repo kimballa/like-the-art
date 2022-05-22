@@ -78,7 +78,11 @@ typedef struct _Sign {
 #define NSC NullSignChannel
 
 extern vector<Sign*> signs;
-extern "C" void setupSigns(I2CParallel &bank0, I2CParallel &bank1);
+extern "C" {
+  extern void setupSigns(I2CParallel &bank0, I2CParallel &bank1);
+  extern void allSignsOff(); // Turn all signs off
+  extern void configMaxPwm(); // Set current PWM level to the configured max brightness.
+}
 
 extern Sign S_WHY;
 extern Sign S_DO;

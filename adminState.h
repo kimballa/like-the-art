@@ -3,9 +3,17 @@
 #ifndef _LTA_ADMIN_STATE_H
 #define _LTA_ADMIN_STATE_H
 
+/** State machine within the MS_ADMIN macro state. */
 enum AdminState {
-  AS_INITIALIZING,   // Admin state just started.
-
+  AS_MAIN_MENU,         // Waiting at main menu.
+  AS_IN_ORDER_TEST,     // Testing each sign in series.
+  AS_TEST_ONE_SIGN,     // Testing a single sign, user can cursor left/right.
+  AS_TEST_EACH_EFFECT,  // Testing effects, user can cursor left/right.
+  AS_TEST_SENTENCE,     // Testing each sentence, user can cursor left/right.
+  AS_CONFIG_BRIGHTNESS, // Configuring the current brightness level.
+  AS_ALL_SIGNS_ON,      // Turn on all signs at configured brightness level.
+  AS_EXITING,           // Preparing to exit admin state.
+  AS_REBOOTING,         // Preparing to reboot.
 };
 
 extern AdminState adminState;
