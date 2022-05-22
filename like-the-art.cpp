@@ -183,14 +183,26 @@ static void pollDarkSensor() {
 
   if (changeAllowed && isDark && macroState == MS_WAITING) {
     // Time to start the show.
-    macroState = MS_RUNNING;
     lastDarkStateChangeTime = now;
+    setMacroStateRunning();
   } else if (changeAllowed && !isDark && macroState == MS_RUNNING) {
     // The sun has found us; pack up for the day.
-    macroState = MS_WAITING;
     lastDarkStateChangeTime = now;
-    // TODO(aaron): Put the ATSAMD51 to sleep for a while? (Don't forget to shut off the lights 1st)
+    setMacroStateWaiting();
   }
+}
+
+void setMacroStateRunning() {
+  DBGPRINT(">>>> Entering RUNNING MacroState <<<<");
+  macroState = MS_RUNNING;
+  attachStandardButtonHandlers();
+}
+
+void setMacroStateWaiting() {
+  DBGPRINT(">>>> Entering WAITING MacroState <<<<");
+  macroState = MS_WAITING;
+  attachStandardButtonHandlers();
+  // TODO(aaron): Put the ATSAMD51 to sleep for a while? (Don't forget to shut off the lights 1st)
 }
 
 /**

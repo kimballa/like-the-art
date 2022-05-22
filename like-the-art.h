@@ -57,6 +57,11 @@ enum MacroState {
 
 extern MacroState macroState;
 
+/** Switch to MS_RUNNING MacroState. */
+extern void setMacroStateRunning();
+/** Switch to MS_WAITING MacroState. */
+extern void setMacroStateWaiting();
+
 /**
  * Pack r/g/b channels for a neopixel into a 32-bit word.
  */

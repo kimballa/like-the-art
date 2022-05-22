@@ -10,7 +10,11 @@ enum AdminState {
 
 extern AdminState adminState;
 
+/** Main loop while in MS_ADMIN MacroState. */
 extern void loopStateAdmin();
+
+/** Switch to the MS_ADMIN MacroState. */
+extern void setMacroStateAdmin();
 
 
 #endif /* _LTA_ADMIN_STATE_H */

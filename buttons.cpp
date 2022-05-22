@@ -28,7 +28,14 @@ void setupButtons() {
     buttons.emplace_back(i, defaultBtnHandler);
   }
 
+  attachStandardButtonHandlers();
+}
+
+void attachStandardButtonHandlers() {
   // TODO(aaron): Attach more interesting button handlers to each Button.
+  for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
+    buttons[i].setHandler(defaultBtnHandler);
+  }
 }
 
 /**
@@ -85,10 +92,8 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
   if (buttonPresses == adminCodeSequence) {
     // The user has keyed in the admin access code sequence.
     // Switch to admin macro state.
-    macroState = MS_ADMIN;
-    adminState = AS_INITIALIZING;
+    setMacroStateAdmin();
     buttonPresses.clear();
-    DBGPRINT(">>>> Entering ADMIN MacroState <<<<");
   }
 }
 

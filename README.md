@@ -68,7 +68,7 @@ In this mode, the buttons choose between the following menu of options:
   and 4 is high-intensity brightness (50, 60, 75, 100% full power respectively).
   One to four signs will illuminate and blink quickly, indicating the chosen brightness level.
   9 to return to top menu.
-* 6 - No function.
+* 6 - Light up all signs at configured brightness level.
 * 7 - Hold 1 second to exit admin mode. The first 3 signs flash 3 times and then
   admin mode ends.
 * 8 - No function.

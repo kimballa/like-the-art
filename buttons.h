@@ -44,6 +44,7 @@ extern "C" {
   void setupButtons();
   void pollButtons();
   void defaultBtnHandler(uint8_t btnId, uint8_t btnState);
+  void attachStandardButtonHandlers();
 };
 
 #endif /* _BUTTONS_H_ */
