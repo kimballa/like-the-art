@@ -8,11 +8,22 @@ static constexpr uint8_t BTN0_PIN = 11; // Button 0 is on D11.
 static I2CParallel buttonBank;
 
 // Keep a rolling history buffer of button presses
-static vector<uint8_t> buttonPresses;
-static vector<uint8_t> adminCodeSequence = { 1, 0, 4, 8, 5, 1, 5, 6, 6, 3 };
+static constexpr uint8_t MAX_PRESS_HISTORY = 10;
+static const uint8_t adminCodeSequence[MAX_PRESS_HISTORY] = { 1, 0, 4, 8, 5, 1, 5, 6, 6, 3 };
+static uint8_t buttonPresses[MAX_PRESS_HISTORY]; // Circular rolling history buffer
+static uint8_t firstPressIdx;
+static uint8_t nextPressIdx;
 
 // All 9 Button instances.
 vector<Button> buttons;
+
+static void wipePasswordHistory() {
+  firstPressIdx = 0;
+  nextPressIdx = 0;
+  for (uint8_t i = 0; i < MAX_PRESS_HISTORY; i++) {
+    buttonPresses[i] = 0;
+  }
+}
 
 /** Initial setup of buttons invoked by the setup() method. */
 void setupButtons() {
@@ -28,6 +39,7 @@ void setupButtons() {
     buttons.emplace_back(i, defaultBtnHandler);
   }
 
+  wipePasswordHistory();
   attachStandardButtonHandlers();
 }
 
@@ -83,7 +95,7 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
     return; // Button was released; don't record.
   }
 
-  DBGPRINT("Registered keypress: " + to_string(btnId));
+  DBGPRINTU("Registered keypress:", btnId);
 
   if (macroState == MS_ADMIN) {
     // Don't track the rolling history when we're already in admin mode;
@@ -94,18 +106,28 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
   }
 
   // Record the latest button press
-  buttonPresses.push_back(btnId);
-  // But don't track a history longer than the admin access code sequence.
-  int deleteCount = buttonPresses.size() - adminCodeSequence.size();
-  if (deleteCount > 0) {
-    buttonPresses.erase(buttonPresses.begin(), buttonPresses.begin() + deleteCount);
+  buttonPresses[nextPressIdx] = btnId;
+  nextPressIdx = (nextPressIdx + 1) % MAX_PRESS_HISTORY;
+  if (nextPressIdx == firstPressIdx) {
+    firstPressIdx = (firstPressIdx + 1) % MAX_PRESS_HISTORY;
   }
 
-  if (buttonPresses == adminCodeSequence) {
+  // Check whether last N button presses matched the admin code.
+  bool match = true;
+  for (uint8_t i = 0; i < min(MAX_PRESS_HISTORY, nextPressIdx - firstPressIdx); i++) {
+    if (buttonPresses[(i + firstPressIdx) % MAX_PRESS_HISTORY] != adminCodeSequence[i]) {
+      match = false;
+    }
+    if (!match) {
+      break; // No need to continue comparison.
+    }
+  }
+
+  if (match) {
     // The user has keyed in the admin access code sequence.
     // Switch to admin macro state.
     setMacroStateAdmin();
-    buttonPresses.clear();
+    wipePasswordHistory();
   }
 }
 

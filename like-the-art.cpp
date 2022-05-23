@@ -85,8 +85,47 @@ static inline void updateNeoPixel() {
   };
 }
 
+static void printWhyLastReset() {
+  switch (RSTC->RCAUSE.reg) {
+  case 1<<0:
+    DBGPRINT("Last reset: power-on");
+    break;
+  case 1<<1:
+    DBGPRINT("Last reset: 1V2 brown-out detected");
+    break;
+  case 1<<2:
+    DBGPRINT("Last reset: 3V3 brown-out detected");
+    break;
+  case 1<<3:
+    DBGPRINT("Last reset: <reason reserved 3>"); // ???
+    break;
+  case 1<<4:
+    DBGPRINT("Last reset: external reset");
+    break;
+  case 1<<5:
+    DBGPRINT("Last reset: WDT timeout");
+    break;
+  case 1<<6:
+    DBGPRINT("Last reset: system reset request");
+    break;
+  case 1<<7:
+    DBGPRINT("Last reset: <reason reserved 7>"); // ???
+    break;
+  }
+}
+
 void setup() {
   DBGSETUP();
+
+  // Connect to I2C parallel bus expanders for signs.
+  Wire.begin();
+  parallelBank0.init(0 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
+  parallelBank1.init(1 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
+  // Turn off signs asap so we don't spend too much time in all-on state.
+  parallelBank0.write(0);
+  parallelBank1.write(0);
+
+  printWhyLastReset();
 
   // If we don't already have SmartEEPROM space configured, reconfigure
   // the NVM controller to allow that. (Will trigger instant reset.)
@@ -116,11 +155,6 @@ void setup() {
   // Set up PWM on PORT_GROUP:PORT_PIN via TCC0.
   pwmTimer.setupTcc();
 
-  // Connect to I2C parallel bus expanders.
-  Wire.begin();
-  parallelBank0.init(0 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
-  parallelBank1.init(1 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
-
   // Connects button-input I2C and configures Button dispatch handler methods.
   setupButtons();
 
@@ -128,6 +162,7 @@ void setup() {
 
   // Define signs and map them to I/O channels.
   setupSigns(parallelBank0, parallelBank1);
+  setupSentences(); // Define collections of signs for each sentence.
 }
 
 // We want the sensor to be stable for a full second before changing state.
@@ -190,6 +225,9 @@ void setMacroStateWaiting() {
   attachStandardButtonHandlers();
   allSignsOff();
   // TODO(aaron): Put the ATSAMD51 to sleep for a while?
+  // TODO(aaron): If we do go to sleep, we need to enable an interrupt to watch for
+  // the BTN_INT gpio signal. Otherwise we'll miss any keypresses while in sleep (meaning
+  // you won't be able to enter admin mode during the day).
 }
 
 /**
@@ -244,7 +282,7 @@ static void loopStateRunning() {
   switch (mode) {
   case MODE_COARSE:
     {
-      signs[0]->enable();
+      signs[0].enable();
       step++;
       if (step >= NUM_STEPS_COARSE) {
         step = 0;
@@ -258,7 +296,7 @@ static void loopStateRunning() {
   case MODE_FINE_UP:
     {
       // Fine step mode, increasing brightness.
-      signs[0]->enable();
+      signs[0].enable();
       step++;
       if (step >= NUM_STEPS_FINE) {
         mode++; // next mode: hold at top brightness.
@@ -269,7 +307,7 @@ static void loopStateRunning() {
     break;
   case MODE_HOLD_TOP:
     {
-      signs[0]->enable();
+      signs[0].enable();
       pwmTimer.setDutyCycle(PWM_FREQ);
       remaining_sleep_micros = HOLD_TOP_DELAY;
       step = NUM_STEPS_FINE;
@@ -278,7 +316,7 @@ static void loopStateRunning() {
     break;
   case MODE_FINE_DOWN:
     {
-      signs[0]->enable();
+      signs[0].enable();
       step--;
       if (step == 0) {
         mode++;
@@ -289,7 +327,7 @@ static void loopStateRunning() {
     break;
   case MODE_HOLD_BOTTOM:
     {
-      signs[0]->disable();
+      signs[0].disable();
       // Blank.
       pwmTimer.setDutyCycle(0);
       remaining_sleep_micros = HOLD_BOTTOM_DELAY;

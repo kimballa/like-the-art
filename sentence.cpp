@@ -6,31 +6,50 @@
 
 vector<Sentence> sentences;
 
-// Helper function for initSentences()
-static void _sentence(const vector<Sign*> &v) {
+// Helper function for setupSentences()
+static void _sentence(const unsigned int signVector) {
   static unsigned int nextSentenceId = 0;
 
-  sentences.push_back(Sentence(nextSentenceId, v));
+  sentences.emplace_back(nextSentenceId, signVector);
   nextSentenceId++;
 }
 
-void initSentences() {
-  _sentence({ &S_YOU, &S_DONT, &S_HAVE, &S_TO, &S_LIKE, &S_ALL, &S_THE, &S_ART, &S_BANG });
-  _sentence({ &S_DO, &S_YOU, &S_LIKE, &S_THE, &S_ART, &S_QUESTION });
-  _sentence({ &S_DO, &S_YOU, &S_LIKE, &S_ART, &S_QUESTION });
-  _sentence({ &S_LIKE, &S_THE, &S_ART, &S_BANG });
-  _sentence({ &S_LOVE, &S_THE, &S_ART, &S_BANG });
-  _sentence({ &S_HATE, &S_THE, &S_ART, &S_BANG });
-  _sentence({ &S_WHY, &S_DO, &S_YOU, &S_LIKE, &S_ART, &S_QUESTION });
-  _sentence({ &S_WHY, &S_DO, &S_YOU, &S_LOVE, &S_ART, &S_QUESTION });
-  _sentence({ &S_WHY, &S_DO, &S_YOU, &S_HATE, &S_ART, &S_QUESTION });
-  _sentence({ &S_WHY, &S_LIKE, &S_ALL, &S_ART, &S_QUESTION });
-  _sentence({ &S_DO, &S_YOU, &S_LOVE, &S_QUESTION });
-  _sentence({ &S_DO, &S_YOU, &S_HATE, &S_QUESTION });
-  _sentence({ &S_WHY, &S_DO, &S_YOU, &S_LOVE, &S_QUESTION });
-  _sentence({ &S_WHY, &S_DO, &S_YOU, &S_HATE, &S_QUESTION });
-  _sentence({ &S_I, &S_LIKE, &S_ART, &S_BANG });
-  _sentence({ &S_I, &S_LOVE, &S_ART, &S_BANG });
-  _sentence({ &S_YOU, &S_DONT, &S_HAVE, &S_TO, &S_LIKE, &S_BM });
+void setupSentences() {
+  _sentence( S_YOU | S_DONT | S_HAVE | S_TO | S_LIKE | S_ALL | S_THE | S_ART | S_BANG );
+  _sentence( S_DO | S_YOU | S_LIKE | S_THE | S_ART | S_QUESTION );
+  _sentence( S_DO | S_YOU | S_LIKE | S_ART | S_QUESTION );
+  _sentence( S_LIKE | S_THE | S_ART | S_BANG );
+  _sentence( S_LOVE | S_THE | S_ART | S_BANG );
+  _sentence( S_HATE | S_THE | S_ART | S_BANG );
+  _sentence( S_WHY | S_DO | S_YOU | S_LIKE | S_ART | S_QUESTION );
+  _sentence( S_WHY | S_DO | S_YOU | S_LOVE | S_ART | S_QUESTION );
+  _sentence( S_WHY | S_DO | S_YOU | S_HATE | S_ART | S_QUESTION );
+  _sentence( S_WHY | S_LIKE | S_ALL | S_ART | S_QUESTION );
+  _sentence( S_DO | S_YOU | S_LOVE | S_QUESTION );
+  _sentence( S_DO | S_YOU | S_HATE | S_QUESTION );
+  _sentence( S_WHY | S_DO | S_YOU | S_LOVE | S_QUESTION );
+  _sentence( S_WHY | S_DO | S_YOU | S_HATE | S_QUESTION );
+  _sentence( S_I | S_LIKE | S_ART | S_BANG );
+  _sentence( S_I | S_LOVE | S_ART | S_BANG );
+  _sentence( S_YOU | S_DONT | S_HAVE | S_TO | S_LIKE | S_BM );
+}
 
+/** Turn on the signs for sentence (and only those signs) */
+void Sentence::enable() {
+  for (unsigned int i = 0; i < NUM_SIGNS; i++) {
+    if (_signs & (1 << i)) {
+      signs[i].enable();
+    } else {
+      signs[i].disable(); // Not part of this sentence.
+    }
+  }
+}
+
+/** Turn signs participating in this sentence off. */
+void Sentence::disable() {
+  for (unsigned int i = 0; i < NUM_SIGNS; i++) {
+    if (_signs & (1 << i)) {
+      signs[i].disable(); // It's an element of this sentence; turn it off.
+    }
+  }
 }

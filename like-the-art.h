@@ -9,7 +9,6 @@
 #define DBG_START_PAUSED
 
 #include <Arduino.h>
-#include <string>
 #include <vector>
 
 #include <I2CParallel.h>

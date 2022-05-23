@@ -79,7 +79,7 @@ static void btnModeTestOneSign(uint8_t btnId, uint8_t btnState) {
   buttons[5].setHandler(btnNextSign);
   buttons[8].setHandler(btnGoToMainMenu);
   configMaxPwm();
-  signs[currentSign]->enable();
+  signs[currentSign].enable();
   DBGPRINT("Testing one sign at a time");
   DBGPRINTU("Active sign:", currentSign);
 }
@@ -154,8 +154,8 @@ static void btnLightEntireBoard(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
   adminState = AS_ALL_SIGNS_ON;
   configMaxPwm();
-  for (auto sign: signs) {
-    sign->enable();
+  for (auto &sign: signs) {
+    sign.enable();
   }
   DBGPRINT("Turning on all signs");
 }
@@ -223,21 +223,21 @@ static void btnGoToMainMenu(uint8_t btnId, uint8_t btnState) {
 
 static void btnPrevSign(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
-  signs[currentSign]->disable();
+  signs[currentSign].disable();
   if (currentSign == 0) {
     currentSign = signs.size() - 1;
   } else {
     currentSign--;
   }
-  signs[currentSign]->enable();
+  signs[currentSign].enable();
   DBGPRINTU("Testing sign:", currentSign);
 }
 
 static void btnNextSign(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
-  signs[currentSign]->disable();
+  signs[currentSign].disable();
   currentSign = (currentSign + 1) % signs.size();
-  signs[currentSign]->enable();
+  signs[currentSign].enable();
   DBGPRINTU("Testing sign:", currentSign);
 }
 
@@ -367,7 +367,14 @@ void loopStateAdmin() {
 void setMacroStateAdmin() {
   DBGPRINT(">>>> Entering ADMIN MacroState <<<<");
   macroState = MS_ADMIN;
+
+  // Reset all Admin state to entry defaults
+  countDownBlinks = 0;
+  currentEffect = 0;
+  currentSign = 0;
+  currentSentence = 0;
   isConfigDirty = false; // No modifications to persistent state made yet.
-  initMainMenu();
+
+  initMainMenu(); // Reconfigure button functions for admin mode.
 }
 

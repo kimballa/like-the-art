@@ -5,14 +5,17 @@
 
 class Sentence {
 public:
-  Sentence(unsigned int id, const vector<Sign*> &signs): _id(id), _signs(signs) { };
+  Sentence(unsigned int id, unsigned int signs): _id(id), _signs(signs) { };
+
+  void enable();
+  void disable();
 
 private:
   const unsigned int _id;
-  vector<Sign*> _signs;
+  const unsigned int _signs;
 };
 
 extern vector<Sentence> sentences;
-extern "C" void initSentences();
+extern "C" void setupSentences();
 
 #endif /* _SENTENCE_H */

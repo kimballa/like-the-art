@@ -60,45 +60,50 @@ class NullSignChannel: public SignChannel {
 /**
  * A Sign defines a single light-up sign. Signs are enabled or disabled through SignChannels.
  */
-typedef struct _Sign {
-  unsigned int id;
-  string word;
-  SignChannel *channel;
+class Sign {
+public:
+  Sign(unsigned int id, const char *const word, SignChannel *sc);
+  Sign(Sign &&other) noexcept;
+  ~Sign();
 
-  void setup(unsigned int id, const string &word, SignChannel *channel);
   void enable();
   void disable();
 
-  _Sign(SignChannel *sc=NULL): id(0), channel(sc) { word = "???"; };
-  ~_Sign();
-} Sign;
+  const unsigned int _id;
+  const char *const _word;
+  SignChannel *_channel;
+};
 
 #define I2CSC I2CSignChannel
 #define GPIOSC GpioSignChannel
 #define NSC NullSignChannel
 
-extern vector<Sign*> signs;
+extern vector<Sign> signs;
+
 extern "C" {
   extern void setupSigns(I2CParallel &bank0, I2CParallel &bank1);
   extern void allSignsOff(); // Turn all signs off
   extern void configMaxPwm(); // Set current PWM level to the configured max brightness.
 }
 
-extern Sign S_WHY;
-extern Sign S_DO;
-extern Sign S_YOU;
-extern Sign S_DONT;
-extern Sign S_HAVE;
-extern Sign S_TO;
-extern Sign S_I;
-extern Sign S_LIKE;
-extern Sign S_LOVE;
-extern Sign S_HATE;
-extern Sign S_BM;
-extern Sign S_ALL;
-extern Sign S_THE;
-extern Sign S_ART;
-extern Sign S_BANG;
-extern Sign S_QUESTION;
+constexpr unsigned int NUM_SIGNS = 16;
+
+// Bitfield-based one shot ids for each sign.
+constexpr unsigned int S_WHY = 1 << 0;
+constexpr unsigned int S_DO = 1 << 1;
+constexpr unsigned int S_YOU = 1 << 2;
+constexpr unsigned int S_DONT = 1 << 3;
+constexpr unsigned int S_HAVE = 1 << 4;
+constexpr unsigned int S_TO = 1 << 5;
+constexpr unsigned int S_I = 1 << 6;
+constexpr unsigned int S_LIKE = 1 << 7;
+constexpr unsigned int S_LOVE = 1 << 8;
+constexpr unsigned int S_HATE = 1 << 9;
+constexpr unsigned int S_BM = 1 << 10;
+constexpr unsigned int S_ALL = 1 << 11;
+constexpr unsigned int S_THE = 1 << 12;
+constexpr unsigned int S_ART = 1 << 13;
+constexpr unsigned int S_BANG = 1 << 14;
+constexpr unsigned int S_QUESTION = 1 << 15;
 
 #endif /* _SIGN_H */

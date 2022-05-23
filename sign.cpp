@@ -1,8 +1,7 @@
 // (C) Copyright 2022 Aaron Kimball
 //
 // Sign class and SignChannel class implementations.
-// Sign channels work on INVERTED logic -- we pull a pin high to disable a sign, low to turn
-// it on.
+// Sign channels pull a pin high to enable a sign, low to turn it off.
 
 #include "like-the-art.h"
 
@@ -33,92 +32,81 @@ void GpioSignChannel::disable() {
 }
 
 
-void _Sign::setup(unsigned int id, const string &word, SignChannel *channel) {
-  this->id = id;
-  this->word = word;
-  this->channel = channel;
+Sign::Sign(unsigned int id, const char *const word, SignChannel *channel):
+    _id(id), _word(std::move(word)), _channel(channel) {
 
   channel->setup();
 }
 
-void _Sign::enable() {
-  DBGPRINT("ON (" + to_string(id) + "): " + word);
-  this->channel->enable();
+// Move constructor.
+Sign::Sign(Sign &&other):
+    _id(other._id), _word(other._word), _channel(other._channel) {
+  other._channel = NULL; // So its d'tor doesn't deallocate it.
 }
 
-void _Sign::disable() {
-  DBGPRINT("OFF (" + to_string(id) + "): " + word);
-  this->channel->disable();
+void Sign::enable() {
+  DBGPRINTU("Enable sign:", _id);
+  DBGPRINT(_word);
+  this->_channel->enable();
 }
 
-_Sign::~_Sign() {
-  if (NULL != channel) {
-    delete channel;
-    channel = NULL;
+void Sign::disable() {
+  DBGPRINTU("Disable sign:", _id);
+  DBGPRINT(_word);
+  this->_channel->disable();
+}
+
+Sign::~Sign() {
+  if (NULL != _channel) {
+    delete _channel;
   }
 }
 
-Sign S_WHY;
-Sign S_DO;
-Sign S_YOU;
-Sign S_DONT;
-Sign S_HAVE;
-Sign S_TO;
-Sign S_I;
-Sign S_LIKE;
-Sign S_LOVE;
-Sign S_HATE;
-Sign S_BM;
-Sign S_ALL;
-Sign S_THE;
-Sign S_ART;
-Sign S_BANG;
-Sign S_QUESTION;
+vector<Sign> signs;
 
-vector<Sign*> signs;
+const char *const W_WHY = "WHY";
+const char *const W_DO = "DO";
+const char *const W_YOU = "YOU";
+const char *const W_DONT = "DON'T";
+const char *const W_HAVE = "HAVE";
+const char *const W_TO = "TO";
+const char *const W_I = "I";
+const char *const W_LIKE = "LIKE";
+const char *const W_LOVE = "LOVE";
+const char *const W_HATE = "HATE";
+const char *const W_BM = ")'(";
+const char *const W_ALL = "ALL";
+const char *const W_THE = "THE";
+const char *const W_ART = "ART";
+const char *const W_BANG = "!";
+const char *const W_QUESTION = "?";
 
 void setupSigns(I2CParallel &bank0, I2CParallel &bank1) {
   // Define Signs with bindings to I/O channels.
-  S_WHY.setup(0, "WHY", new I2CSC(bank0, 0));
-  S_DO.setup(1, "DO", new NSC());
-  S_YOU.setup(2, "YOU", new NSC());
-  S_DONT.setup(3, "DON'T", new NSC());
-  S_HAVE.setup(4, "HAVE", new NSC());
-  S_TO.setup(5, "TO", new NSC());
-  S_I.setup(6, "I", new NSC());
-  S_LIKE.setup(7, "LIKE", new NSC());
-  S_LOVE.setup(8, "LOVE", new NSC());
-  S_HATE.setup(9, "HATE", new NSC());
-  S_BM.setup(10, ")'(", new NSC());
-  S_ALL.setup(11, "ALL", new NSC());
-  S_THE.setup(12, "THE", new NSC());
-  S_ART.setup(13, "ART", new NSC());
-  S_BANG.setup(14, "!", new NSC());
-  S_QUESTION.setup(15, "?", new NSC());
-
-  // Load them all into an array for iteration purposes.
   signs.clear();
-  signs.push_back(&S_WHY);
-  signs.push_back(&S_DO);
-  signs.push_back(&S_YOU);
-  signs.push_back(&S_DONT);
-  signs.push_back(&S_HAVE);
-  signs.push_back(&S_TO);
-  signs.push_back(&S_I);
-  signs.push_back(&S_LIKE);
-  signs.push_back(&S_LOVE);
-  signs.push_back(&S_HATE);
-  signs.push_back(&S_BM);
-  signs.push_back(&S_ALL);
-  signs.push_back(&S_THE);
-  signs.push_back(&S_ART);
-  signs.push_back(&S_BANG);
-  signs.push_back(&S_QUESTION);
+  signs.reserve(NUM_SIGNS);
+  // TODO(aaron): Bind signs to actual production channels.
+  signs.emplace_back(0, W_WHY, new I2CSC(bank0, 0));
+  signs.emplace_back(1, W_DO, new NSC());
+  signs.emplace_back(2, W_YOU, new NSC());
+  signs.emplace_back(3, W_DONT, new NSC());
+  signs.emplace_back(4, W_HAVE, new NSC());
+  signs.emplace_back(5, W_TO, new NSC());
+  signs.emplace_back(6, W_I, new NSC());
+  signs.emplace_back(7, W_LIKE, new NSC());
+  signs.emplace_back(8, W_LOVE, new NSC());
+  signs.emplace_back(9, W_HATE, new NSC());
+  signs.emplace_back(10, W_BM, new NSC());
+  signs.emplace_back(11, W_ALL, new NSC());
+  signs.emplace_back(12, W_THE, new NSC());
+  signs.emplace_back(13, W_ART, new NSC());
+  signs.emplace_back(14, W_BANG, new NSC());
+  signs.emplace_back(15, W_QUESTION, new NSC());
 }
 
 void allSignsOff() {
-  for (auto sign : signs) {
-    sign->disable();
+  for (auto &sign : signs) {
+    sign.disable();
   }
 }
 
