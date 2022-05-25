@@ -116,7 +116,7 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
   // Check whether last N button presses matched the admin code.
   bool match = true;
   unsigned int counted = 0;
-  for (uint8_t i = 0; i < min(CODE_LENGTH, nextPressIdx - firstPressIdx); i++) {
+  for (uint8_t i = 0; i < min(CODE_LENGTH, (uint8_t)(nextPressIdx - firstPressIdx)); i++) {
     counted++;
     if (buttonPresses[(i + firstPressIdx) % MAX_PRESS_HISTORY] != adminCodeSequence[i]) {
       match = false;
