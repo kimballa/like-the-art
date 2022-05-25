@@ -45,8 +45,8 @@ Sign::Sign(Sign &&other):
 }
 
 void Sign::enable() {
-  DBGPRINTU("Enable sign:", _id);
-  DBGPRINT(_word);
+  //DBGPRINTU("Enable sign:", _id);
+  //DBGPRINT(_word);
   this->_channel->enable();
 }
 
@@ -86,10 +86,11 @@ void setupSigns(I2CParallel &bank0, I2CParallel &bank1) {
   signs.clear();
   signs.reserve(NUM_SIGNS);
   // TODO(aaron): Bind signs to actual production channels.
+  // Remember that the production channels are NOT wired in order in I2C; check schematic.
   signs.emplace_back(0, W_WHY, new I2CSC(bank0, 0));
-  signs.emplace_back(1, W_DO, new NSC());
-  signs.emplace_back(2, W_YOU, new NSC());
-  signs.emplace_back(3, W_DONT, new NSC());
+  signs.emplace_back(1, W_DO, new I2CSC(bank0, 1));
+  signs.emplace_back(2, W_YOU, new I2CSC(bank0, 2));
+  signs.emplace_back(3, W_DONT, new I2CSC(bank0, 3));
   signs.emplace_back(4, W_HAVE, new NSC());
   signs.emplace_back(5, W_TO, new NSC());
   signs.emplace_back(6, W_I, new NSC());

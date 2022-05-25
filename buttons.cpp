@@ -4,12 +4,13 @@
 
 static constexpr uint8_t BTN0_PIN = 11; // Button 0 is on D11.
 
-// PCF8574N on channel 0x22 reads buttons 1--8.
+// PCF8574N on channel 0x23 reads buttons 1--8.
 static I2CParallel buttonBank;
 
 // Keep a rolling history buffer of button presses
-static constexpr uint8_t MAX_PRESS_HISTORY = 10;
-static const uint8_t adminCodeSequence[MAX_PRESS_HISTORY] = { 1, 0, 4, 8, 5, 1, 5, 6, 6, 3 };
+static constexpr uint8_t CODE_LENGTH = 10;
+static constexpr uint8_t MAX_PRESS_HISTORY = CODE_LENGTH + 1;
+static const uint8_t adminCodeSequence[CODE_LENGTH] = { 1, 0, 4, 8, 5, 1, 5, 6, 6, 3 };
 static uint8_t buttonPresses[MAX_PRESS_HISTORY]; // Circular rolling history buffer
 static uint8_t firstPressIdx;
 static uint8_t nextPressIdx;
@@ -27,7 +28,7 @@ static void wipePasswordHistory() {
 
 /** Initial setup of buttons invoked by the setup() method. */
 void setupButtons() {
-  buttonBank.init(2 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
+  buttonBank.init(3 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
   buttonBank.enableInputs(0xFF); // all 8 channels of button bank are inputs.
 
   pinMode(BTN0_PIN, INPUT_PULLUP);
@@ -114,7 +115,9 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
 
   // Check whether last N button presses matched the admin code.
   bool match = true;
-  for (uint8_t i = 0; i < min(MAX_PRESS_HISTORY, nextPressIdx - firstPressIdx); i++) {
+  unsigned int counted = 0;
+  for (uint8_t i = 0; i < min(CODE_LENGTH, nextPressIdx - firstPressIdx); i++) {
+    counted++;
     if (buttonPresses[(i + firstPressIdx) % MAX_PRESS_HISTORY] != adminCodeSequence[i]) {
       match = false;
     }
@@ -123,7 +126,7 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
     }
   }
 
-  if (match) {
+  if (match && counted == CODE_LENGTH) {
     // The user has keyed in the admin access code sequence.
     // Switch to admin macro state.
     setMacroStateAdmin();

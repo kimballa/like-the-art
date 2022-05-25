@@ -5,8 +5,8 @@
 
 #define DEBUG
 #define DBG_STD_STRING
-#define DBG_WAIT_FOR_CONNECT
-#define DBG_START_PAUSED
+//#define DBG_WAIT_FOR_CONNECT
+//#define DBG_START_PAUSED
 
 #include <Arduino.h>
 #include <vector>
@@ -24,28 +24,10 @@ using namespace std;
 #include "buttons.h"
 #include "adminState.h"
 #include "saveconfig.h"
+#include "animation.h"
 
-enum Effect {
-  EF_APPEAR,         // Just turn on the words and hold them there.
-  EF_GLOW,           // Fade up from nothing, hold high, fade back to zero.
-  EF_BLINK,          // Behold the cursed <blink> tag!
-  EF_ONE_AT_A_TIME,  // Highlight each word in series, turning off word n before showing n+1.
-  EF_BUILD,          // Light up incrementally more words one at a time left-to-right
-  EF_SNAKE,          // Like BUILD, but also "unbuild" by then turning off the 1st word, then the
-                     // 2nd... until all is dark.
-  EF_SLIDE_TO_END,   // Make a light pulse "zip" through all the words until reaching the last
-                     // word in the phrase, then that word stays on. Then zip the 2nd-to-last
-                     // word...
-
-// TODO(aaron): These are effectively layered effects that should be possible to 'or' on top of
-// the preceeding effects.
-  EF_FRITZING_ART,   // Like GLOW, but the word "ART" zaps in and out randomly, like neon on the fritz.
-                     // Only valid for sentences with 'ART' in them.
-  EF_FRITZING_DONT,  // Like FRITZING_ART, but the word "DON'T" is what's zapping in and out.
-  EF_ALT_LOVE_HATE,  // Alternate lighting the "LOVE" and "HATE" words.
-};
-
-constexpr unsigned int NUM_EFFECTS = (unsigned int)(Effect::EF_ALT_LOVE_HATE) + 1;
+/** Every loop iteration lasts for 10ms. */
+constexpr unsigned int LOOP_MICROS = 10 * 1000;
 
 // The top-level state machine of the system: it's either running, waiting for nightfall, or in
 // admin mode. Other state machines controlling LED signs, etc. are only valid in certain macro

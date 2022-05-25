@@ -7,7 +7,13 @@ class Sentence {
 public:
   Sentence(unsigned int id, unsigned int signs): _id(id), _signs(signs) { };
 
+  /** Return number of words in the sentence */
+  unsigned int getNumWords() const;
+
+  /** Light up the sentence (simple "appear" effect) */
   void enable();
+
+  /** Turn off all words in the sentence. */
   void disable();
 
 private:

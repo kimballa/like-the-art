@@ -6,7 +6,7 @@
 #include "like-the-art.h"
 
 // Value between 0--255 controlling how bright the onboard NeoPixel is. (255=max)
-constexpr unsigned int NEOPIXEL_BRIGHTNESS = 64;
+constexpr unsigned int NEOPIXEL_BRIGHTNESS = 32;
 constexpr uint32_t neopx_color_running = neoPixelColor(0, 255, 0); // green in std mode.
 constexpr uint32_t neopx_color_admin = neoPixelColor(255, 0, 0); // red in admin mode.
 constexpr uint32_t neopx_color_wait = neoPixelColor(0, 0, 255); // blue while waiting for dark
@@ -34,9 +34,6 @@ constexpr unsigned int NUM_STEPS_FINE = 200;
 constexpr unsigned int COARSE_STEP_SIZE = PWM_FREQ / NUM_STEPS_COARSE;
 constexpr unsigned int FINE_STEP_SIZE = PWM_FREQ / NUM_STEPS_FINE;
 
-/** Every loop iteration lasts for 10ms. */
-constexpr unsigned int LOOP_MICROS = 10 * 1000;
-
 /**
  * When we want to hold at a current display state, we sleep in LOOP_MICROS increments
  * until remaining_sleep_micros is zero.
@@ -48,7 +45,7 @@ PwmTimer pwmTimer(PORT_GROUP, PORT_PIN, PORT_FN, TCC, PWM_CHANNEL, PWM_FREQ, DEF
 // Integrated neopixel on D8.
 Adafruit_NeoPixel neoPixel(1, 8, NEO_GRB | NEO_KHZ800);
 
-// I2C is connected to 3 PCF8574N's, on channel 0x20, 0x21, and 0x22.
+// I2C is connected to 3 PCF8574N's, on channel 0x20 (LED0), 0x21 (LED1), and 0x23 (buttons).
 // Two declared here for interacting with LEDs. The buttonBank is declared in button.cpp.
 I2CParallel parallelBank0;
 I2CParallel parallelBank1;
@@ -120,10 +117,11 @@ void setup() {
   // Connect to I2C parallel bus expanders for signs.
   Wire.begin();
   parallelBank0.init(0 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
-  parallelBank1.init(1 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
+  // TODO(aaron): Enable parallel bus expander for full board.
+  //parallelBank1.init(1 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
   // Turn off signs asap so we don't spend too much time in all-on state.
   parallelBank0.write(0);
-  parallelBank1.write(0);
+  //parallelBank1.write(0);
 
   printWhyLastReset();
 
