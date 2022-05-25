@@ -6,7 +6,7 @@
 #include "like-the-art.h"
 
 // Value between 0--255 controlling how bright the onboard NeoPixel is. (255=max)
-constexpr unsigned int NEOPIXEL_BRIGHTNESS = 32;
+constexpr unsigned int NEOPIXEL_BRIGHTNESS = 10;
 constexpr uint32_t neopx_color_running = neoPixelColor(0, 255, 0); // green in std mode.
 constexpr uint32_t neopx_color_admin = neoPixelColor(255, 0, 0); // red in admin mode.
 constexpr uint32_t neopx_color_wait = neoPixelColor(0, 0, 255); // blue while waiting for dark
@@ -69,6 +69,7 @@ MacroState macroState = MS_RUNNING;
 
 // NeoPixel color reflects current MacroState.
 static inline void updateNeoPixel() {
+  neoPixel.clear();
   switch(macroState) {
   case MS_RUNNING:
     neoPixel.setPixelColor(0, neopx_color_running);
@@ -80,6 +81,7 @@ static inline void updateNeoPixel() {
     neoPixel.setPixelColor(0, neopx_color_wait);
     break;
   };
+  neoPixel.show();
 }
 
 static void printWhyLastReset() {
