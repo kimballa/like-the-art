@@ -5,12 +5,6 @@
 
 #include "like-the-art.h"
 
-// Value between 0--255 controlling how bright the onboard NeoPixel is. (255=max)
-constexpr unsigned int NEOPIXEL_BRIGHTNESS = 10;
-constexpr uint32_t neopx_color_running = neoPixelColor(0, 255, 0); // green in std mode.
-constexpr uint32_t neopx_color_admin = neoPixelColor(255, 0, 0); // red in admin mode.
-constexpr uint32_t neopx_color_wait = neoPixelColor(0, 0, 255); // blue while waiting for dark
-
 // DARK sensor is on A4 / D18.
 constexpr uint8_t DARK_SENSOR_PIN = 18;
 
@@ -67,18 +61,40 @@ static int step = 0;
 
 MacroState macroState = MS_RUNNING;
 
+// Neopixel intensity is increasing each tick if true.
+static bool isNeoPixelIncreasing = true;
+static constexpr float NEO_PIXEL_INCREMENT = 1.0f / 256.0f;
+static constexpr uint32_t NEO_PIXEL_MAX_INTENSITY = 20; // out of 255.
+static float neoPixelIntensity = 0;
+
 // NeoPixel color reflects current MacroState.
 static inline void updateNeoPixel() {
+  if (isNeoPixelIncreasing) {
+    neoPixelIntensity += NEO_PIXEL_INCREMENT;
+    if (neoPixelIntensity >= 1 - NEO_PIXEL_INCREMENT) {
+      isNeoPixelIncreasing = false;
+      neoPixelIntensity = 1.0f;
+    }
+  } else {
+    neoPixelIntensity -= NEO_PIXEL_INCREMENT;
+    if (neoPixelIntensity <= NEO_PIXEL_INCREMENT) {
+      isNeoPixelIncreasing = true;
+      neoPixelIntensity = 0.0f;
+    }
+  }
+
+  uint8_t colorIntensity = NEO_PIXEL_MAX_INTENSITY * neoPixelIntensity;
+
   neoPixel.clear();
   switch(macroState) {
   case MS_RUNNING:
-    neoPixel.setPixelColor(0, neopx_color_running);
+    neoPixel.setPixelColor(0, neoPixelColor(0, colorIntensity, 0)); // Green
     break;
   case MS_ADMIN:
-    neoPixel.setPixelColor(0, neopx_color_admin);
+    neoPixel.setPixelColor(0, neoPixelColor(colorIntensity, 0, 0)); // Red
     break;
   case MS_WAITING:
-    neoPixel.setPixelColor(0, neopx_color_wait);
+    neoPixel.setPixelColor(0, neoPixelColor(0, 0, colorIntensity)); // Blue
     break;
   };
   neoPixel.show();
@@ -136,7 +152,6 @@ void setup() {
   // Set up neopixel
   neoPixel.begin();
   neoPixel.clear(); // start with pixel turned off
-  neoPixel.setBrightness(NEOPIXEL_BRIGHTNESS);
   updateNeoPixel();
   neoPixel.show();
 
@@ -248,12 +263,9 @@ static inline void sleep_loop_increment(unsigned long loop_start_micros) {
     delay_time -= loop_exec_duration; // Subtract loop runtime from total sleep.
   }
 
-  if (delay_time > remaining_sleep_micros) {
-    // Don't sleep for longer than necessary to pay off the sleep debt for the current state cycle.
-    delay_time = remaining_sleep_micros;
+  if (delay_time > 0) {
+    delayMicroseconds(delay_time);
   }
-
-  delayMicroseconds(delay_time);
 
   if (LOOP_MICROS >= remaining_sleep_micros) {
     // Sleep debt is paid off. Next loop we advance state.
@@ -374,8 +386,7 @@ void loop() {
     // or wait for an interrupt to wake us.
     break;
   default:
-    DBGPRINT("ERROR -- unknown MacroState:");
-    DBGPRINT(macroState);
+    DBGPRINTI("ERROR -- unknown MacroState:", macroState);
     DBGPRINT("Reverting to running state");
     macroState = MS_RUNNING;
   }
