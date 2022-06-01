@@ -267,6 +267,9 @@ static inline void sleep_loop_increment(unsigned long loop_start_micros) {
     delayMicroseconds(delay_time);
   }
 
+  // TODO(aaron): Should remaining_sleep_micros also get reduced by loop_exec_duration?
+  // If we do have remaining_sleep_micros, then MS_RUNNING is going to immediately return,
+  // so the difference is probably negligible.
   if (LOOP_MICROS >= remaining_sleep_micros) {
     // Sleep debt is paid off. Next loop we advance state.
     remaining_sleep_micros = 0;
@@ -370,6 +373,7 @@ void loop() {
   pollDarkSensor();
 
   updateNeoPixel(); // Display current macroState on NeoPixel.
+  logSignStatus();
 
   // Run the macro-state-specific loop body.
   switch(macroState) {

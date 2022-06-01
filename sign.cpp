@@ -5,6 +5,9 @@
 
 #include "like-the-art.h"
 
+static uint32_t activeSignBits = 0; // bit array tracking active signs.
+static uint32_t loggedActiveSignBits = 0; // bit array tracking active signs @ last time logged.
+
 void I2CSignChannel::setup() {
   disable();
 }
@@ -33,7 +36,7 @@ void GpioSignChannel::disable() {
 
 
 Sign::Sign(unsigned int id, const char *const word, SignChannel *channel):
-    _id(id), _word(std::move(word)), _channel(channel) {
+    _id(id), _word(std::move(word)), _channel(channel), _active(false) {
 
   channel->setup();
 }
@@ -48,12 +51,16 @@ void Sign::enable() {
   //DBGPRINTU("Enable sign:", _id);
   //DBGPRINT(_word);
   this->_channel->enable();
+  this->_active = true;
+  activeSignBits |= 1 << _id;
 }
 
 void Sign::disable() {
-  DBGPRINTU("Disable sign:", _id);
-  DBGPRINT(_word);
+  //DBGPRINTU("Disable sign:", _id);
+  //DBGPRINT(_word);
   this->_channel->disable();
+  this->_active = false;
+  activeSignBits &= ~(1 << _id);
 }
 
 Sign::~Sign() {
@@ -80,6 +87,9 @@ const char *const W_THE = "THE";
 const char *const W_ART = "ART";
 const char *const W_BANG = "!";
 const char *const W_QUESTION = "?";
+
+static constexpr unsigned int SENTENCE_LEN = 64; // At most 62 chars + \0 in the sentence.
+static char activeSentence[SENTENCE_LEN];
 
 void setupSigns(I2CParallel &bank0, I2CParallel &bank1) {
   // Define Signs with bindings to I/O channels.
@@ -109,6 +119,31 @@ void allSignsOff() {
   for (auto &sign : signs) {
     sign.disable();
   }
+}
+
+/** Print a log msg w/ the current active signs. */
+void logSignStatus() {
+  if (activeSignBits == loggedActiveSignBits) {
+    // State hasn't changed since last loop. Don't log.
+    return;
+  }
+  loggedActiveSignBits = activeSignBits;
+
+  // There's been a change in sign lighting. Log the current sentence.
+  memset(activeSentence, 0, SENTENCE_LEN);
+  for (auto &sign : signs) {
+    if (sign.isActive()) {
+      strcat(activeSentence, sign.word());
+    } else {
+      uint8_t len = strlen(sign.word());
+      for (uint8_t i = 0; i < len; i++) {
+        strcat(activeSentence, "-");
+      }
+    }
+    strcat(activeSentence, " ");
+  }
+
+  DBGPRINT(activeSentence);
 }
 
 // Set the PWM level to the current configured maximum brightness

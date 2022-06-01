@@ -68,10 +68,14 @@ public:
 
   void enable();
   void disable();
+  bool isActive() const { return _active; };
+  const char *word() const { return _word; };
 
+private:
   const unsigned int _id;
   const char *const _word;
   SignChannel *_channel;
+  bool _active;
 };
 
 #define I2CSC I2CSignChannel
@@ -84,6 +88,7 @@ extern "C" {
   extern void setupSigns(I2CParallel &bank0, I2CParallel &bank1);
   extern void allSignsOff(); // Turn all signs off
   extern void configMaxPwm(); // Set current PWM level to the configured max brightness.
+  extern void logSignStatus(); // Log the current sign status.
 }
 
 constexpr unsigned int NUM_SIGNS = 16;
