@@ -148,23 +148,25 @@ void logSignStatus() {
 
 // Set the PWM level to the current configured maximum brightness
 void configMaxPwm() {
+  pwmTimer.setDutyCycle(getMaxPwmDutyCycle());
+}
+
+// Return the configured max-brightness PWM duty cycle
+uint32_t getMaxPwmDutyCycle() {
   uint32_t freq = pwmTimer.getPwmFreq();
 
   switch (fieldConfig.maxBrightness) {
   case BRIGHTNESS_FULL: // 100%
-    pwmTimer.setDutyCycle(freq);
-    break;
+    return freq;
   case BRIGHTNESS_NORMAL: // 70%
-    pwmTimer.setDutyCycle((freq * 70) / 100);
-    break;
+    return (freq * 70) / 100;
   case BRIGHTNESS_POWER_SAVE_1: // 60%
-    pwmTimer.setDutyCycle((freq * 60) / 100);
-    break;
+    return (freq * 60) / 100;
   case BRIGHTNESS_POWER_SAVE_2: // 50%
-    pwmTimer.setDutyCycle(freq / 2);
-    break;
+    return freq / 2;
   default: // Unknown PWM frequency required... Just use 'normal' (70%)
-    pwmTimer.setDutyCycle((freq * 70) / 100);
-    break;
+    return (freq * 70) / 100;
   }
+
 }
+

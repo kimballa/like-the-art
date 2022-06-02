@@ -17,8 +17,8 @@ public:
   void disable();
 
 private:
-  const unsigned int _id;
-  const unsigned int _signs;
+  unsigned int _id;
+  unsigned int _signs;
 };
 
 extern vector<Sentence> sentences;

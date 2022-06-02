@@ -26,6 +26,11 @@ enum Effect {
 
 constexpr unsigned int NUM_EFFECTS = (unsigned int)(Effect::EF_ALT_LOVE_HATE) + 1;
 
+constexpr unsigned int BLINK_PHASE_MILLIS = 1000;
+inline uint32_t durationForBlinkCount(uint32_t blinkCount) {
+  return blinkCount * BLINK_PHASE_MILLIS * 2; // one on + one off phase per blink = 2 * phase_millis.
+}
+
 /**
  * An animation makes a sentence appear with a specified effect.
  *
@@ -55,12 +60,12 @@ constexpr unsigned int NUM_EFFECTS = (unsigned int)(Effect::EF_ALT_LOVE_HATE) + 
  */
 class Animation {
 public:
-  Animation(): _sentence(0, 0), _effect(EF_APPEAR) {};
+  Animation();
 
-  void setParameters(const Sentence &s, const Effect e, unsigned int milliseconds);
+  void setParameters(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
 
-  bool isRunning() const;
-  bool isComplete() const;
+  bool isRunning() const { return _isRunning; }
+  bool isComplete() const { return !_isRunning && _phaseCountRemaining == 0; };
   const Sentence &getSentence() const { return _sentence; };
 
   void start(); // Start the animation sequence.
@@ -68,15 +73,26 @@ public:
   void stop(); // Halt the animation sequence even if there's part remaining.
 
 private:
+  //// Core parameters for the animation ////
   Sentence _sentence;
   Effect _effect;
+  uint32_t _flags;
+
+  //// State to manage advancing frames & phases of the animation ////
   unsigned int _remainingTime; // millis.
   bool _isRunning;
+  bool _isFirstPhaseTic; // True during the first frame of a phase.
 
   unsigned int _phaseDuration; // millis per phase
   unsigned int _phaseRemainingMillis; // millis remaining in current phase
   unsigned int _phaseCountRemaining; // number of phases to go.
+  unsigned int _curPhaseNum; // sequentially incrementing counter thru phases.
 
+  //// Effect-specific state ////
+
+  // EF_GLOW
+  uint32_t _glowStepSize;
+  unsigned int _glowCurrentBrightness;
 };
 
 extern Animation activeAnimation;

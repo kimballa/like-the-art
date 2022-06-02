@@ -28,12 +28,6 @@ constexpr unsigned int NUM_STEPS_FINE = 200;
 constexpr unsigned int COARSE_STEP_SIZE = PWM_FREQ / NUM_STEPS_COARSE;
 constexpr unsigned int FINE_STEP_SIZE = PWM_FREQ / NUM_STEPS_FINE;
 
-/**
- * When we want to hold at a current display state, we sleep in LOOP_MICROS increments
- * until remaining_sleep_micros is zero.
- */
-unsigned int remaining_sleep_micros = 0;
-
 PwmTimer pwmTimer(PORT_GROUP, PORT_PIN, PORT_FN, TCC, PWM_CHANNEL, PWM_FREQ, DEFAULT_PWM_PRESCALER);
 
 // Integrated neopixel on D8.
@@ -43,21 +37,6 @@ Adafruit_NeoPixel neoPixel(1, 8, NEO_GRB | NEO_KHZ800);
 // Two declared here for interacting with LEDs. The buttonBank is declared in button.cpp.
 I2CParallel parallelBank0;
 I2CParallel parallelBank1;
-
-// State machine that drives this skech is based on cycling through the following modes,
-// where we then take a number of PWM-varying actions that cycle 'step' through different ranges
-// and at different speeds.
-constexpr int MODE_COARSE = 0;
-constexpr int MODE_FINE_UP = 1;
-constexpr int MODE_HOLD_TOP = 2;
-constexpr int MODE_FINE_DOWN = 3;
-constexpr int MODE_HOLD_BOTTOM = 4;
-
-constexpr int MAX_MODE_STATE = MODE_HOLD_BOTTOM;
-
-static int mode = MODE_COARSE;
-
-static int step = 0;
 
 MacroState macroState = MS_RUNNING;
 
@@ -266,103 +245,23 @@ static inline void sleep_loop_increment(unsigned long loop_start_micros) {
   if (delay_time > 0) {
     delayMicroseconds(delay_time);
   }
-
-  // TODO(aaron): Should remaining_sleep_micros also get reduced by loop_exec_duration?
-  // If we do have remaining_sleep_micros, then MS_RUNNING is going to immediately return,
-  // so the difference is probably negligible.
-  if (LOOP_MICROS >= remaining_sleep_micros) {
-    // Sleep debt is paid off. Next loop we advance state.
-    remaining_sleep_micros = 0;
-  } else {
-    remaining_sleep_micros -= LOOP_MICROS;
-  }
 }
 
 /** Main loop body when we're in the MS_RUNNING macro state. */
 static void loopStateRunning() {
-  if (remaining_sleep_micros > 0) {
-    // Do not advance the state machine. Our existing sleep debt remains to be paid off.
+
+  if (activeAnimation.isRunning()) {
+    // We're currently in an animation; just advance the next frame.
+    activeAnimation.next();
     return;
   }
 
-  // Advance to next state.
-  //
-/*
-  DBGPRINT("mode:");
-  DBGPRINT(mode);
-  DBGPRINT("step:");
-  DBGPRINT(step);
-  */
+  // Need to choose a new animation
+  Effect e = (Effect)random(3); // appear, glow, or blink.
+  Sentence s(0, random(16)); // light up some combo of the 4 LEDs we have.
 
-  switch (mode) {
-  case MODE_COARSE:
-    {
-      signs[0].enable();
-      step++;
-      if (step >= NUM_STEPS_COARSE) {
-        step = 0;
-        // We wrapped. Next mode is fine.
-        mode++;
-      }
-      pwmTimer.setDutyCycle(step * COARSE_STEP_SIZE);
-      remaining_sleep_micros = COARSE_STEP_DELAY;
-    };
-    break;
-  case MODE_FINE_UP:
-    {
-      // Fine step mode, increasing brightness.
-      signs[0].enable();
-      step++;
-      if (step >= NUM_STEPS_FINE) {
-        mode++; // next mode: hold at top brightness.
-      }
-      pwmTimer.setDutyCycle(step * FINE_STEP_SIZE);
-      remaining_sleep_micros = FINE_STEP_DELAY;
-    };
-    break;
-  case MODE_HOLD_TOP:
-    {
-      signs[0].enable();
-      pwmTimer.setDutyCycle(PWM_FREQ);
-      remaining_sleep_micros = HOLD_TOP_DELAY;
-      step = NUM_STEPS_FINE;
-      mode++;
-    };
-    break;
-  case MODE_FINE_DOWN:
-    {
-      signs[0].enable();
-      step--;
-      if (step == 0) {
-        mode++;
-      }
-      pwmTimer.setDutyCycle(step * FINE_STEP_SIZE);
-      remaining_sleep_micros = FINE_STEP_DELAY;
-    };
-    break;
-  case MODE_HOLD_BOTTOM:
-    {
-      signs[0].disable();
-      // Blank.
-      pwmTimer.setDutyCycle(0);
-      remaining_sleep_micros = HOLD_BOTTOM_DELAY;
-      step = 0;
-      mode = MODE_COARSE; // Back to beginning of cycle.
-    };
-    break;
-  default:
-    DBGPRINT("ERROR *** Invalid mode state:");
-    DBGPRINT(mode);
-    mode = MODE_COARSE;
-    step = 0;
-    break;
-  }
-
-  if (mode > MAX_MODE_STATE) {
-    // Reset state machine.
-    mode = 0;
-    step = 0;
-  }
+  activeAnimation.setParameters(s, e, 0, 6000); // start a new animation for 6 seconds
+  activeAnimation.start();
 }
 
 void loop() {
@@ -396,8 +295,5 @@ void loop() {
   }
 
   // At the end of each loop iteration, sleep until this iteration is LOOP_MICROS long.
-  // If we are in the RUNNING state, we then continue to do sensor-poll-only iterations of
-  // LOOP_MICROS until remaining_sleep_micros is zero, at which point we can advance to the
-  // next state.
   sleep_loop_increment(loop_start_micros);
 }

@@ -31,6 +31,8 @@ public:
   uint8_t getState() const { return _curState; };
 
   void setHandler(buttonHandler_t handlerFn) { _handlerFn = handlerFn; };
+  const buttonHandler_t getHandler() const { return _handlerFn; };
+
   unsigned int getDebounceInterval() const { return _debounceInterval; };
   void setDebounceInterval(unsigned int debounce) { _debounceInterval = debounce; };
 

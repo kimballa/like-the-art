@@ -164,7 +164,7 @@ bool Button::update(uint8_t latestPoll) {
   // Save reading for next interrogation of update().
   _priorPoll = latestPoll;
 
-  if ((millis() - _readStartTime) > BTN_DEBOUNCE_MILLIS) {
+  if ((millis() - _readStartTime) > _debounceInterval) {
     // The reading has remained consistent for the debounce interval.
     // It's a legitimate state.
 

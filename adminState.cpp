@@ -22,12 +22,9 @@ static void btnBrightness1(uint8_t btnId, uint8_t btnState);
 static void btnBrightness2(uint8_t btnId, uint8_t btnState);
 static void btnBrightness3(uint8_t btnId, uint8_t btnState);
 static void btnGoToMainMenu(uint8_t btnId, uint8_t btnState);
+static void btnCtrlAltDelete(uint8_t btnId, uint8_t btnState);
 
 ////////////// State tracked by various AdminStates ////////////////
-
-// if blinking something N times, how many remain?
-// (modes: exit, reboot)
-int countDownBlinks = 0;
 
 // What effect to use for current illumination?
 // (mode: TEST_ONE_SIGN, TEST_EACH_EFFECT, TEST_SENTENCE)
@@ -78,6 +75,7 @@ static void btnModeTestOneSign(uint8_t btnId, uint8_t btnState) {
   buttons[3].setHandler(btnPrevSign);
   buttons[5].setHandler(btnNextSign);
   buttons[8].setHandler(btnGoToMainMenu);
+  buttons[8].setDebounceInterval(BTN_DEBOUNCE_MILLIS);
   configMaxPwm();
   signs[currentSign].enable();
   DBGPRINT("Testing one sign at a time");
@@ -98,6 +96,7 @@ static void btnModeChangeEffect(uint8_t btnId, uint8_t btnState) {
   buttons[3].setHandler(btnPrevEffect);
   buttons[5].setHandler(btnNextEffect);
   buttons[8].setHandler(btnGoToMainMenu);
+  buttons[8].setDebounceInterval(BTN_DEBOUNCE_MILLIS);
   DBGPRINT("Testing one effect at a time");
   DBGPRINTU("Active effect:", currentEffect);
   DBGPRINTU("Active sentence:", currentSentence);
@@ -115,6 +114,7 @@ static void btnModeTestEachSentence(uint8_t btnId, uint8_t btnState) {
   buttons[3].setHandler(btnPrevSentence);
   buttons[5].setHandler(btnNextSentence);
   buttons[8].setHandler(btnGoToMainMenu);
+  buttons[8].setDebounceInterval(BTN_DEBOUNCE_MILLIS);
   DBGPRINT("Testing one sentence at a time");
   DBGPRINTU("Active effect:", currentEffect);
   DBGPRINTU("Active sentence:", currentSentence);
@@ -139,6 +139,8 @@ static void btnModeChooseBrightnessLevel(uint8_t btnId, uint8_t btnState) {
   buttons[1].setHandler(btnBrightness1);
   buttons[2].setHandler(btnBrightness2);
   buttons[3].setHandler(btnBrightness3);
+  buttons[8].setHandler(btnGoToMainMenu);
+  buttons[8].setDebounceInterval(BTN_DEBOUNCE_MILLIS);
 
   // TODO(aaron): Turn on 1--4 signs at this pwm.
   configMaxPwm();
@@ -174,8 +176,8 @@ static void btnExitAdminMode(uint8_t btnId, uint8_t btnState) {
   if (isConfigDirty) {
     saveFieldConfig(&fieldConfig);
   }
-  configMaxPwm();
-  countDownBlinks = 3;
+  activeAnimation.setParameters(Sentence(0, 0x7), EF_BLINK, 0, durationForBlinkCount(3));
+  activeAnimation.start();
   DBGPRINT("Exiting admin menu...");
 }
 
@@ -193,8 +195,10 @@ static void btnCtrlAltDelete(uint8_t btnId, uint8_t btnState) {
   if (isConfigDirty) {
     saveFieldConfig(&fieldConfig);
   }
-  configMaxPwm();
-  countDownBlinks = 5;
+
+  // Set up blinking animation before we reboot.
+  activeAnimation.setParameters(Sentence(0, 0x7), EF_BLINK, 0, durationForBlinkCount(5));
+  activeAnimation.start();
   DBGPRINT("User requested reboot");
 }
 
@@ -216,7 +220,11 @@ static void attachAdminButtonHandlers() {
 /** Button 9 in various sub menus is "return to main menu" */
 static void btnGoToMainMenu(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
-  initMainMenu();
+  // Don't directly return to main menu functionality; wait for
+  // the user to release all buttons first. In the meantime, null
+  // out what the buttons do.
+  attachEmptyButtonHandlers();
+  adminState = AS_WAIT_FOR_CLEAR_BTNS;
 }
 
 ////////////// Button functions for TEST_ONE_SIGN ////////////////
@@ -314,6 +322,8 @@ static void btnBrightness3(uint8_t btnId, uint8_t btnState) {
 ////////////// Main admin state machine loop ////////////////
 
 void loopStateAdmin() {
+  bool buttonsAreClear;
+
   switch (adminState) {
   case AS_MAIN_MENU:
     // TODO(aaron): First sign should blink slowly.
@@ -339,20 +349,37 @@ void loopStateAdmin() {
     // Nothing to monitor in-state.
     break;
   case AS_EXITING:
-    // TODO(aaron): first 3 signs flash 3 times.
-    // TODO(aaron): Decrement countDownBlinks
-    if (countDownBlinks == 0) {
+    // First 3 signs flash 3 times. Once done, then we exit the admin state.
+    if (activeAnimation.isRunning()) {
+      activeAnimation.next();
+    } else {
       // Done with the sign-off indicator; actually exit.
       setMacroStateRunning();
     }
     break;
   case AS_REBOOTING:
-    // TODO(aaron): first 3 signs flash 5 times.
-    // TODO(aaron): Decrement countDownBlinks
-    if (countDownBlinks == 0) {
+    // first 3 signs flash 5 times. When done, we do the reboot.
+    if (activeAnimation.isRunning()) {
+      activeAnimation.next();
+    } else {
       // Done with the sign-off indicator; actually reboot.
       DBGPRINT("*** REBOOTING SYSTEM ***");
       NVIC_SystemReset(); // Adios!
+    }
+    break;
+  case AS_WAIT_FOR_CLEAR_BTNS:
+    // After we press a "return to main menu" button, wait for user to stop
+    // pressing buttons before reassigning their capabilities.
+    buttonsAreClear = true;
+    for (int i = 0; i < NUM_BUTTONS; i++) {
+      if (buttons[i].getState() == BTN_PRESSED) {
+        buttonsAreClear = false;
+        break;
+      }
+    }
+
+    if (buttonsAreClear) {
+      initMainMenu();
     }
     break;
   default:
@@ -369,11 +396,12 @@ void setMacroStateAdmin() {
   macroState = MS_ADMIN;
 
   // Reset all Admin state to entry defaults
-  countDownBlinks = 0;
   currentEffect = 0;
   currentSign = 0;
   currentSentence = 0;
   isConfigDirty = false; // No modifications to persistent state made yet.
+
+  activeAnimation.stop(); // Cancel any in-flight animation.
 
   initMainMenu(); // Reconfigure button functions for admin mode.
 }
