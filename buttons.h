@@ -33,15 +33,17 @@ public:
   void setHandler(buttonHandler_t handlerFn) { _handlerFn = handlerFn; };
   const buttonHandler_t getHandler() const { return _handlerFn; };
 
-  unsigned int getDebounceInterval() const { return _debounceInterval; };
-  void setDebounceInterval(unsigned int debounce) { _debounceInterval = debounce; };
+  unsigned int getPushDebounceInterval() const { return _pushDebounceInterval; };
+  void setPushDebounceInterval(unsigned int debounce) { _pushDebounceInterval = debounce; };
+  void setReleaseDebounceInterval(unsigned int debounce) { _releaseDebounceInterval = debounce; };
 
 private:
   uint8_t _id;
   uint8_t _curState;
   uint8_t _priorPoll;
   uint32_t _readStartTime;
-  unsigned int _debounceInterval;
+  unsigned int _pushDebounceInterval;
+  unsigned int _releaseDebounceInterval;
   buttonHandler_t _handlerFn;
 };
 

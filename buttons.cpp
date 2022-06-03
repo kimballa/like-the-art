@@ -49,7 +49,8 @@ void attachStandardButtonHandlers() {
   // TODO(aaron): Attach more interesting button handlers to each Button.
   for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
     buttons[i].setHandler(defaultBtnHandler);
-    buttons[i].setDebounceInterval(BTN_DEBOUNCE_MILLIS);
+    buttons[i].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
+    buttons[i].setReleaseDebounceInterval(BTN_DEBOUNCE_MILLIS);
   }
 }
 
@@ -59,7 +60,8 @@ void attachStandardButtonHandlers() {
 void attachEmptyButtonHandlers() {
   for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
     buttons[i].setHandler(emptyBtnHandler);
-    buttons[i].setDebounceInterval(BTN_DEBOUNCE_MILLIS);
+    buttons[i].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
+    buttons[i].setReleaseDebounceInterval(BTN_DEBOUNCE_MILLIS);
   }
 }
 
@@ -146,7 +148,9 @@ void defaultBtnHandler(uint8_t btnId, uint8_t btnState) {
 
 Button::Button(uint8_t id, buttonHandler_t handlerFn):
     _id(id), _curState(BTN_OPEN), _priorPoll(BTN_OPEN), _readStartTime(0),
-    _debounceInterval(BTN_DEBOUNCE_MILLIS), _handlerFn(handlerFn) {
+    _pushDebounceInterval(BTN_DEBOUNCE_MILLIS),
+    _releaseDebounceInterval(BTN_DEBOUNCE_MILLIS),
+    _handlerFn(handlerFn) {
 
   if (NULL == _handlerFn) {
     _handlerFn = defaultBtnHandler;
@@ -164,7 +168,14 @@ bool Button::update(uint8_t latestPoll) {
   // Save reading for next interrogation of update().
   _priorPoll = latestPoll;
 
-  if ((millis() - _readStartTime) > _debounceInterval) {
+  // Decide which debounce interval to use, depending on whether we're monitoring
+  // for a next state change of "push" (0 to 1) or "release" (1 to 0).
+  unsigned int debounceInterval = _pushDebounceInterval;
+  if (_curState == BTN_PRESSED) {
+    debounceInterval = _releaseDebounceInterval;
+  }
+
+  if ((millis() - _readStartTime) > debounceInterval) {
     // The reading has remained consistent for the debounce interval.
     // It's a legitimate state.
 

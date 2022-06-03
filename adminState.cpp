@@ -75,7 +75,7 @@ static void btnModeTestOneSign(uint8_t btnId, uint8_t btnState) {
   buttons[3].setHandler(btnPrevSign);
   buttons[5].setHandler(btnNextSign);
   buttons[8].setHandler(btnGoToMainMenu);
-  buttons[8].setDebounceInterval(BTN_DEBOUNCE_MILLIS);
+  buttons[8].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
   configMaxPwm();
   signs[currentSign].enable();
   DBGPRINT("Testing one sign at a time");
@@ -96,7 +96,7 @@ static void btnModeChangeEffect(uint8_t btnId, uint8_t btnState) {
   buttons[3].setHandler(btnPrevEffect);
   buttons[5].setHandler(btnNextEffect);
   buttons[8].setHandler(btnGoToMainMenu);
-  buttons[8].setDebounceInterval(BTN_DEBOUNCE_MILLIS);
+  buttons[8].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
   DBGPRINT("Testing one effect at a time");
   DBGPRINTU("Active effect:", currentEffect);
   DBGPRINTU("Active sentence:", currentSentence);
@@ -114,7 +114,7 @@ static void btnModeTestEachSentence(uint8_t btnId, uint8_t btnState) {
   buttons[3].setHandler(btnPrevSentence);
   buttons[5].setHandler(btnNextSentence);
   buttons[8].setHandler(btnGoToMainMenu);
-  buttons[8].setDebounceInterval(BTN_DEBOUNCE_MILLIS);
+  buttons[8].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
   DBGPRINT("Testing one sentence at a time");
   DBGPRINTU("Active effect:", currentEffect);
   DBGPRINTU("Active sentence:", currentSentence);
@@ -140,7 +140,7 @@ static void btnModeChooseBrightnessLevel(uint8_t btnId, uint8_t btnState) {
   buttons[2].setHandler(btnBrightness2);
   buttons[3].setHandler(btnBrightness3);
   buttons[8].setHandler(btnGoToMainMenu);
-  buttons[8].setDebounceInterval(BTN_DEBOUNCE_MILLIS);
+  buttons[8].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
 
   // TODO(aaron): Turn on 1--4 signs at this pwm.
   configMaxPwm();
@@ -213,8 +213,8 @@ static void attachAdminButtonHandlers() {
   buttons[7].setHandler(emptyBtnHandler);
   buttons[8].setHandler(btnCtrlAltDelete);
 
-  buttons[6].setDebounceInterval(EXIT_ADMIN_DEBOUNCE); // 1 second press required.
-  buttons[8].setDebounceInterval(REBOOT_DEBOUNCE); // 3 second press required.
+  buttons[6].setPushDebounceInterval(EXIT_ADMIN_DEBOUNCE); // 1 second press required.
+  buttons[8].setPushDebounceInterval(REBOOT_DEBOUNCE); // 3 second press required.
 }
 
 /** Button 9 in various sub menus is "return to main menu" */
