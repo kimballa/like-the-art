@@ -47,10 +47,17 @@ int saveFieldConfig(DeviceFieldConfig *config) {
   config->validitySignature = PROGRAMMING_SIGNATURE;
   int ret = writeEEPROM(DATA_EEPROM_OFFSET, config);
   if (ret != 0) {
+    DBGPRINTI("writeEEPROM() error:", ret);
     return ret;
   }
 
-  return commitEEPROM();
+  ret = commitEEPROM();
+  if (ret != 0) {
+    DBGPRINTI("commitEEPROM() error:", ret);
+    return ret;
+  }
+
+  return ret;
 }
 
 /**

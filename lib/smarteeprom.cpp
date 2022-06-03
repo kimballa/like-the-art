@@ -212,7 +212,6 @@ int commitEEPROM() {
   NVMCTRL->INTFLAG.bit.DONE = 1; // clear flag.
   NVMCTRL->CTRLB.reg = NVMCTRL_CTRLB_CMDEX_KEY | NVMCTRL_CTRLB_CMD_SEEFLUSH;
   while (!NVMCTRL->INTFLAG.bit.DONE);
-  while (!NVMCTRL->INTFLAG.bit.SEEWRC);
 
   if (NVMCTRL->INTFLAG.bit.SEESOVF) {
     // We overflowed the smart eeprom area.
