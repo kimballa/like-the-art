@@ -121,18 +121,12 @@ void allSignsOff() {
   }
 }
 
-/** Print a log msg w/ the current active signs. */
-void logSignStatus() {
-  if (activeSignBits == loggedActiveSignBits) {
-    // State hasn't changed since last loop. Don't log.
-    return;
-  }
-  loggedActiveSignBits = activeSignBits;
-
-  // There's been a change in sign lighting. Log the current sentence.
+/** Print a log msg w/ the signs that would be active in the specified sentence. */
+void logSentence(uint32_t sentenceBits) {
+  loggedActiveSignBits = sentenceBits;
   memset(activeSentence, 0, SENTENCE_LEN);
-  for (auto &sign : signs) {
-    if (sign.isActive()) {
+  for (const auto &sign : signs) {
+    if (sentenceBits & (1 << sign.id())) {
       strcat(activeSentence, sign.word());
     } else {
       uint8_t len = strlen(sign.word());
@@ -144,6 +138,17 @@ void logSignStatus() {
   }
 
   DBGPRINT(activeSentence);
+}
+
+/** Print a log msg w/ the current active signs. */
+void logSignStatus() {
+  if (activeSignBits == loggedActiveSignBits) {
+    // State hasn't changed since last loop. Don't log.
+    return;
+  }
+
+  // There's been a change in sign lighting. Log the current sentence.
+  logSentence(activeSignBits);
 }
 
 // Set the PWM level to the current configured maximum brightness

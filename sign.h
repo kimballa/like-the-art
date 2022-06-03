@@ -71,6 +71,8 @@ public:
   bool isActive() const { return _active; };
   const char *word() const { return _word; };
 
+  unsigned int id() const { return _id; };
+
 private:
   const unsigned int _id;
   const char *const _word;
@@ -89,6 +91,7 @@ extern "C" {
   extern void allSignsOff(); // Turn all signs off
   extern void configMaxPwm(); // Set current PWM level to the configured max brightness.
   extern uint32_t getMaxPwmDutyCycle();
+  extern void logSentence(uint32_t sentenceBits);
   extern void logSignStatus(); // Log the current sign status.
 }
 

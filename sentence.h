@@ -10,11 +10,16 @@ public:
   /** Return number of words in the sentence */
   unsigned int getNumWords() const;
 
+  unsigned int id() const { return _id; };
+
   /** Light up the sentence (simple "appear" effect) */
   void enable();
 
   /** Turn off all words in the sentence. */
   void disable();
+
+  /** Print this sentence to the serial console. */
+  void toDbgPrint() const { logSentence(_signs); };
 
 private:
   unsigned int _id;

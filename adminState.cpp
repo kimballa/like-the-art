@@ -30,7 +30,7 @@ static void btnCtrlAltDelete(uint8_t btnId, uint8_t btnState);
 // (mode: TEST_ONE_SIGN, TEST_EACH_EFFECT, TEST_SENTENCE)
 int currentEffect = 0;
 
-// What sign is lit? (mode: TEST_ONE_SIGN)
+// What sign is lit? (mode: TEST_ONE_SIGN, IN_ORDER_TEST)
 int currentSign = 0;
 
 // What sentence is lit? (mode: TEST_SENTENCE)
@@ -45,6 +45,7 @@ bool isConfigDirty = false;
 static void initMainMenu() {
   adminState = AS_MAIN_MENU;
   attachAdminButtonHandlers();
+  activeAnimation.stop();
   allSignsOff();
   configMaxPwm();
 }
@@ -57,8 +58,12 @@ static void initMainMenu() {
 static void btnInOrderTest(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
   adminState = AS_IN_ORDER_TEST;
+
   allSignsOff();
   configMaxPwm();
+  currentSign = 0;
+  activeAnimation.setParameters(Sentence(0, 1 << currentSign), EF_APPEAR, 0, 1000);
+  activeAnimation.start();
   DBGPRINT("Performing in-order sign test");
 }
 
@@ -70,14 +75,17 @@ static void btnModeTestOneSign(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
   adminState = AS_TEST_ONE_SIGN;
 
-  allSignsOff();
   attachEmptyButtonHandlers();
   buttons[3].setHandler(btnPrevSign);
   buttons[5].setHandler(btnNextSign);
   buttons[8].setHandler(btnGoToMainMenu);
   buttons[8].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
+
+  activeAnimation.stop();
+  allSignsOff();
   configMaxPwm();
   signs[currentSign].enable();
+
   DBGPRINT("Testing one sign at a time");
   DBGPRINTU("Active sign:", currentSign);
 }
@@ -91,15 +99,19 @@ static void btnModeChangeEffect(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
   adminState = AS_TEST_EACH_EFFECT;
 
-  allSignsOff();
   attachEmptyButtonHandlers();
   buttons[3].setHandler(btnPrevEffect);
   buttons[5].setHandler(btnNextEffect);
   buttons[8].setHandler(btnGoToMainMenu);
   buttons[8].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
+
+  activeAnimation.stop();
+  allSignsOff();
+
   DBGPRINT("Testing one effect at a time");
   DBGPRINTU("Active effect:", currentEffect);
   DBGPRINTU("Active sentence:", currentSentence);
+  sentences[currentSentence].toDbgPrint();
 }
 
 /**
@@ -109,15 +121,33 @@ static void btnModeTestEachSentence(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
   adminState = AS_TEST_SENTENCE;
 
-  allSignsOff();
   attachEmptyButtonHandlers();
   buttons[3].setHandler(btnPrevSentence);
   buttons[5].setHandler(btnNextSentence);
   buttons[8].setHandler(btnGoToMainMenu);
   buttons[8].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
+
+  activeAnimation.stop();
+  allSignsOff();
+
   DBGPRINT("Testing one sentence at a time");
   DBGPRINTU("Active effect:", currentEffect);
   DBGPRINTU("Active sentence:", currentSentence);
+  sentences[currentSentence].toDbgPrint();
+}
+
+// Set up the animation that expresses the current brightness level
+// by lighting up 1 to 4 signs.
+static void brightnessSelectAnimation() {
+  activeAnimation.stop();
+  allSignsOff();
+  configMaxPwm();
+  // Turn on 1--4 signs at this pwm.
+  // The BRIGHTNESS_xyz enums are actually coded as 1 to 4 full bits, so we can
+  // use that value directly as the "sentence" bitmask to display.
+  activeAnimation.setParameters(Sentence(0, fieldConfig.maxBrightness), EF_BLINK, 0,
+      durationForBlinkCount(1));
+  activeAnimation.start();
 }
 
 /**
@@ -133,7 +163,6 @@ static void btnModeChooseBrightnessLevel(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
   adminState = AS_CONFIG_BRIGHTNESS;
 
-  allSignsOff();
   attachEmptyButtonHandlers();
   buttons[0].setHandler(btnBrightness0);
   buttons[1].setHandler(btnBrightness1);
@@ -142,8 +171,8 @@ static void btnModeChooseBrightnessLevel(uint8_t btnId, uint8_t btnState) {
   buttons[8].setHandler(btnGoToMainMenu);
   buttons[8].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
 
-  // TODO(aaron): Turn on 1--4 signs at this pwm.
-  configMaxPwm();
+  brightnessSelectAnimation();
+
   DBGPRINT("Configuring brightness level");
   printCurrentBrightness();
 }
@@ -155,6 +184,7 @@ static void btnModeChooseBrightnessLevel(uint8_t btnId, uint8_t btnState) {
 static void btnLightEntireBoard(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
   adminState = AS_ALL_SIGNS_ON;
+  activeAnimation.stop();
   configMaxPwm();
   for (auto &sign: signs) {
     sign.enable();
@@ -171,6 +201,7 @@ static void btnExitAdminMode(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_PRESSED) { return; }
   adminState = AS_EXITING;
 
+  activeAnimation.stop();
   allSignsOff();
   attachEmptyButtonHandlers();
   if (isConfigDirty) {
@@ -190,6 +221,7 @@ static void btnCtrlAltDelete(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_PRESSED) { return; }
   adminState = AS_REBOOTING;
 
+  activeAnimation.stop();
   allSignsOff();
   attachEmptyButtonHandlers();
   if (isConfigDirty) {
@@ -258,14 +290,16 @@ static void btnPrevEffect(uint8_t btnId, uint8_t btnState) {
   } else {
     currentEffect--;
   }
-  // TODO(aaron): Cancel current effect; initialize the new effect.
+  // Cancel current effect; new effect will be initialized immediately in loop().
+  activeAnimation.stop();
   DBGPRINTU("Testing effect:", currentEffect);
 }
 
 static void btnNextEffect(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
   currentEffect = (currentEffect + 1) % NUM_EFFECTS;
-  // TODO(aaron): Cancel current effect; initialize the new effect.
+  // Cancel current effect; new effect will be initialized immediately in loop().
+  activeAnimation.stop();
   DBGPRINTU("Testing effect:", currentEffect);
 }
 
@@ -278,15 +312,19 @@ static void btnPrevSentence(uint8_t btnId, uint8_t btnState) {
   } else {
     currentSentence--;
   }
-  // TODO(aaron): Cancel current sentence/effect; show new sentence w/ selected effect.
+  // Cancel current sentence/effect; new sentence will be initialized immediately in loop().
+  activeAnimation.stop();
   DBGPRINTU("Testing sentence:", currentSentence);
+  sentences[currentSentence].toDbgPrint();
 }
 
 static void btnNextSentence(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
   currentSentence = (currentSentence + 1) % sentences.size();
-  // TODO(aaron): Cancel current sentence/effect; show new sentence w/ selected effect.
+  // Cancel current sentence/effect; new sentence will be initialized immediately in loop().
+  activeAnimation.stop();
   DBGPRINTU("Testing sentence:", currentSentence);
+  sentences[currentSentence].toDbgPrint();
 }
 
 ////////////// Button functions for CONFIG_BRIGHTNESS ////////////////
@@ -295,7 +333,7 @@ static void setBrightness(uint8_t brightness) {
   fieldConfig.maxBrightness = brightness;
   isConfigDirty = true;
   printCurrentBrightness();
-  configMaxPwm();
+  brightnessSelectAnimation();
 }
 
 static void btnBrightness0(uint8_t btnId, uint8_t btnState) {
@@ -322,55 +360,10 @@ static void btnBrightness3(uint8_t btnId, uint8_t btnState) {
 ////////////// Main admin state machine loop ////////////////
 
 void loopStateAdmin() {
-  bool buttonsAreClear;
-
-  switch (adminState) {
-  case AS_MAIN_MENU:
-    // TODO(aaron): First sign should blink slowly.
-    break;
-  case AS_IN_ORDER_TEST:
-    // TODO(aaron): Scroll through signs one-by-one for a second each.
-    break;
-  case AS_TEST_ONE_SIGN:
-    // One sign turned on @ configured brightness level on state entry.
-    // Nothing to monitor in-state.
-    break;
-  case AS_TEST_EACH_EFFECT:
-    // TODO(aaron): Show current selected sentence, apply configured effect.
-    break;
-  case AS_TEST_SENTENCE:
-    // TODO(aaron): Show current selected sentence, apply configured effect.
-    break;
-  case AS_CONFIG_BRIGHTNESS:
-    // TODO(aaron): 1--4 signs slowly blink at current brightness level.
-    break;
-  case AS_ALL_SIGNS_ON:
-    // All signs turned on @ configured brightness level on state entry.
-    // Nothing to monitor in-state.
-    break;
-  case AS_EXITING:
-    // First 3 signs flash 3 times. Once done, then we exit the admin state.
-    if (activeAnimation.isRunning()) {
-      activeAnimation.next();
-    } else {
-      // Done with the sign-off indicator; actually exit.
-      setMacroStateRunning();
-    }
-    break;
-  case AS_REBOOTING:
-    // first 3 signs flash 5 times. When done, we do the reboot.
-    if (activeAnimation.isRunning()) {
-      activeAnimation.next();
-    } else {
-      // Done with the sign-off indicator; actually reboot.
-      DBGPRINT("*** REBOOTING SYSTEM ***");
-      NVIC_SystemReset(); // Adios!
-    }
-    break;
-  case AS_WAIT_FOR_CLEAR_BTNS:
+  if (adminState == AS_WAIT_FOR_CLEAR_BTNS) {
     // After we press a "return to main menu" button, wait for user to stop
     // pressing buttons before reassigning their capabilities.
-    buttonsAreClear = true;
+    bool buttonsAreClear = true;
     for (int i = 0; i < NUM_BUTTONS; i++) {
       if (buttons[i].getState() == BTN_PRESSED) {
         buttonsAreClear = false;
@@ -379,8 +372,62 @@ void loopStateAdmin() {
     }
 
     if (buttonsAreClear) {
+      // Buttons are released; go back to the MAIN_MENU state.
       initMainMenu();
     }
+  }
+
+  if (activeAnimation.isRunning()) {
+    // We triggered an animation within admin mode; just run that.
+    activeAnimation.next();
+    return;
+  }
+
+  // Any animation is complete/idle as we process state changes or other tasks here.
+
+  switch (adminState) {
+  case AS_MAIN_MENU:
+    // First sign should blink slowly.
+    activeAnimation.setParameters(Sentence(0, 1), EF_BLINK, 0, durationForBlinkCount(1));
+    activeAnimation.start();
+    break;
+  case AS_IN_ORDER_TEST:
+    // Scroll through signs one-by-one for a second each.
+    currentSign = (currentSign + 1) % signs.size();
+    activeAnimation.setParameters(Sentence(0, 1 << currentSign), EF_APPEAR, 0, 1000);
+    activeAnimation.start();
+    break;
+  case AS_TEST_ONE_SIGN:
+    // One sign turned on @ configured brightness level on state entry.
+    // Nothing to monitor in-state.
+    break;
+  case AS_TEST_EACH_EFFECT:
+  case AS_TEST_SENTENCE:
+    // Show current selected sentence, apply configured effect.
+    activeAnimation.setParameters(sentences[currentSentence], (Effect)currentEffect, 0, 5000);
+    activeAnimation.start();
+    break;
+  case AS_CONFIG_BRIGHTNESS:
+    // 1--4 signs slowly blink at current brightness level.
+    brightnessSelectAnimation();
+    break;
+  case AS_ALL_SIGNS_ON:
+    // All signs turned on @ configured brightness level on state entry.
+    // Nothing to monitor in-state.
+    break;
+  case AS_EXITING:
+    // First 3 signs flash 3 times. Once done, then we exit the admin state.
+    // As we are done with the sign-off indicator -- actually exit.
+    setMacroStateRunning();
+    break;
+  case AS_REBOOTING:
+    // first 3 signs flash 5 times. When done, we do the reboot.
+    // As we are done with the sign-off indicator -- actually reboot.
+    DBGPRINT("*** REBOOTING SYSTEM ***");
+    NVIC_SystemReset(); // Adios!
+    break;
+  case AS_WAIT_FOR_CLEAR_BTNS:
+    // Nothing further to do.
     break;
   default:
     DBGPRINTX("Unknown admin state:", (unsigned int)adminState);

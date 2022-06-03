@@ -110,6 +110,7 @@ void Animation::next() {
     // Single phase which lasts the entire duration of the effect.
     // On first frame, turn on the signs; and we're done.
     if (_isFirstPhaseTic) {
+      configMaxPwm();
       _sentence.enable();
     }
     break;
