@@ -137,32 +137,30 @@ static constexpr uint16_t DARK_SENSOR_ANALOG_THRESHOLD = 680;
  */
 static bool pollDarkSensor() {
   // Perform analog read of DARK sensor to show value between 0...1024
-  // as to how dark it is outside according to the sensor.
+  // as to how dark it is outside according to the sensor. (This takes ~27us.)
   uint16_t darkAnalogVal = analogRead(DARK_SENSOR_ANALOG);
-  darkAnalogValues[lastAnalogDarkIdx] = darkAnalogVal;
-  lastAnalogDarkIdx++;
-  uint16_t averagedDarkReading = 0;
-  if (lastAnalogDarkIdx == AVG_NUM_DARK_SAMPLES) {
-    lastAnalogDarkIdx = 0;
-    // We got enough values, average them.
-    uint32_t sum = 0;
-    for (uint8_t i = 0; i < AVG_NUM_DARK_SAMPLES; i++) {
-      sum += darkAnalogValues[i];
-    }
-    averagedDarkReading = sum / AVG_NUM_DARK_SAMPLES;
-    #ifdef REPORT_ANALOG_DARK_SENSOR
-      DBGPRINTU("DARK sensor avg:", averagedDarkReading);
-    #endif // REPORT_ANALOG_DARK_SENSOR
-  } else {
-    // Didn't get a final averaged sample.
+  darkAnalogValues[lastAnalogDarkIdx++] = darkAnalogVal;
+  if (lastAnalogDarkIdx < AVG_NUM_DARK_SAMPLES) {
+    // Didn't get a final averaged sample. Still collecting data.
     return false;
   }
 
+  uint16_t averagedDarkReading = 0;
+  // We got enough values, average them.
+  uint32_t sum = 0;
+  for (uint8_t i = 0; i < AVG_NUM_DARK_SAMPLES; i++) {
+    sum += darkAnalogValues[i];
+  }
+  averagedDarkReading = sum / AVG_NUM_DARK_SAMPLES;
+  lastAnalogDarkIdx = 0;
+
   uint8_t isDark = (averagedDarkReading > DARK_SENSOR_ANALOG_THRESHOLD) ? 1 : 0;
+  unsigned int now = millis();
+
   #ifdef REPORT_ANALOG_DARK_SENSOR
+    DBGPRINTU("DARK sensor avg:", averagedDarkReading);
     DBGPRINTU("Current DARK Bool:", isDark);
   #endif // REPORT_ANALOG_DARK_SENSOR
-  unsigned int now = millis();
 
   if (isDark != prevDark) {
     lastDarkSensorChangeTime = now;
