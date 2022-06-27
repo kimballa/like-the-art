@@ -7,6 +7,7 @@
 
 // DARK sensor is on A4 / D18.
 constexpr uint8_t DARK_SENSOR_PIN = 18;
+constexpr uint8_t DARK_SENSOR_ANALOG = A4;
 
 // PWM is on D6 -- PA18, altsel G (TCC0/WO[6]; channel 0)
 constexpr unsigned int PORT_GROUP = 0; // 0 = PORTA
@@ -108,6 +109,91 @@ static void printWhyLastReset() {
   }
 }
 
+// We want the DARK sensor to be stable for a few seconds before changing state.
+static constexpr unsigned int DARK_SENSOR_DEBOUNCE_MILLIS = 5000;
+static unsigned int lastDarkSensorChangeTime = 0;
+
+// After the sensor triggers a state change, we commit to that state for 60s.
+static constexpr unsigned int DARK_SENSOR_STATE_DELAY_MILLIS = 60000;
+static unsigned int lastDarkStateChangeTime = 0;
+
+static uint8_t prevDark = 0; // prior polled value of the DARK gpio pin.
+
+// For analog reading of DARK sensor.
+static uint16_t darkAnalogValues[AVG_NUM_DARK_SAMPLES];
+static uint8_t lastAnalogDarkIdx = 0;
+
+// Threshold in 0..1023 for "how dark does it need to be for us to say it's DARK".
+// 0 is very bright. 1023 is quite dark indeed.
+static constexpr uint16_t DARK_SENSOR_ANALOG_THRESHOLD = 680;
+
+/**
+ * Poll the DARK sensor pin. If DARK=1 then it's dark out and we can display the magic.
+ * If DARK=0 then it's light out and we should be in idle mode.
+ * n.b. that if we're in admin mode, the dark sensor should not cause a state transition;
+ * we stay in admin mode day or night.
+ *
+ * Return true if we got a valid reading, false if we're just collecting sample data.
+ */
+static bool pollDarkSensor() {
+  // Perform analog read of DARK sensor to show value between 0...1024
+  // as to how dark it is outside according to the sensor.
+  uint16_t darkAnalogVal = analogRead(DARK_SENSOR_ANALOG);
+  darkAnalogValues[lastAnalogDarkIdx] = darkAnalogVal;
+  lastAnalogDarkIdx++;
+  uint16_t averagedDarkReading = 0;
+  if (lastAnalogDarkIdx == AVG_NUM_DARK_SAMPLES) {
+    lastAnalogDarkIdx = 0;
+    // We got enough values, average them.
+    uint32_t sum = 0;
+    for (uint8_t i = 0; i < AVG_NUM_DARK_SAMPLES; i++) {
+      sum += darkAnalogValues[i];
+    }
+    averagedDarkReading = sum / AVG_NUM_DARK_SAMPLES;
+    #ifdef REPORT_ANALOG_DARK_SENSOR
+      DBGPRINTU("DARK sensor avg:", averagedDarkReading);
+    #endif // REPORT_ANALOG_DARK_SENSOR
+  } else {
+    // Didn't get a final averaged sample.
+    return false;
+  }
+
+  uint8_t isDark = (averagedDarkReading > DARK_SENSOR_ANALOG_THRESHOLD) ? 1 : 0;
+  #ifdef REPORT_ANALOG_DARK_SENSOR
+    DBGPRINTU("Current DARK Bool:", isDark);
+  #endif // REPORT_ANALOG_DARK_SENSOR
+  unsigned int now = millis();
+
+  if (isDark != prevDark) {
+    lastDarkSensorChangeTime = now;
+    prevDark = isDark;
+  }
+
+  // Check that the sensor value has been stable (debounced) for long enough.
+  unsigned int sensorStabilityTime = now - lastDarkSensorChangeTime;
+  bool sensorIsStable = sensorStabilityTime >= DARK_SENSOR_DEBOUNCE_MILLIS;
+
+  // Schmitt-trigger for state changes: even on a stable sensor, don't change state
+  // back and forth particularly quickly; commit to a new state for a reasonable dwell time.
+  unsigned int stateDuration = now - lastDarkStateChangeTime;
+  bool stateDwellLongEnough = stateDuration > DARK_SENSOR_STATE_DELAY_MILLIS;
+
+  // In order to change state, we need a stable sensor AND enough time in the prior state.
+  bool changeAllowed = sensorIsStable && stateDwellLongEnough;
+
+  if (changeAllowed && isDark && macroState == MS_WAITING) {
+    // Time to start the show.
+    lastDarkStateChangeTime = now;
+    setMacroStateRunning();
+  } else if (changeAllowed && !isDark && macroState == MS_RUNNING) {
+    // The sun has found us; pack up for the day.
+    lastDarkStateChangeTime = now;
+    setMacroStateWaiting();
+  }
+
+  return true;
+}
+
 void setup() {
   DBGSETUP();
 
@@ -157,53 +243,27 @@ void setup() {
   // Define signs and map them to I/O channels.
   setupSigns(parallelBank0, parallelBank1);
   setupSentences(); // Define collections of signs for each sentence.
-}
 
-// We want the sensor to be stable for a full second before changing state.
-static constexpr unsigned int DARK_SENSOR_DEBOUNCE_MILLIS = 1000;
-static unsigned int lastDarkSensorChangeTime = 0;
+  #ifdef REPORT_ANALOG_DARK_SENSOR
+    // For dark sensor; set up analog reference and discard a few reads to get accurate ones.
+    analogReference(AR_DEFAULT);
+    for (uint8_t i = 0; i < 10; i++) {
+      delay(5);
+      analogRead(DARK_SENSOR_ANALOG);
+    }
+  #endif // REPORT_ANALOG_DARK_SENSOR
 
-// After the sensor triggers a state change, we commit to that state for 60s.
-static constexpr unsigned int DARK_SENSOR_STATE_DELAY_MILLIS = 60000;
-static unsigned int lastDarkStateChangeTime = 0;
-
-static uint8_t prevDark = 0; // prior polled value of the gpio pin.
-
-/**
- * Poll the DARK sensor pin. If DARK=1 then it's dark out and we can display the magic.
- * If DARK=0 then it's light out and we should be in idle mode.
- * n.b. that if we're in admin mode, the dark sensor should not cause a state transition;
- * we stay in admin mode day or night.
- */
-static void pollDarkSensor() {
-  uint8_t isDark = digitalRead(DARK_SENSOR_PIN);
-  unsigned int now = millis();
-
-  if (isDark != prevDark) {
-    lastDarkSensorChangeTime = now;
-    prevDark = isDark;
+  // Decide whether to begin in RUNNING (i.e. "DARK") mode or WAITING (DARK==0; daylight).
+  // Repeatedly call pollDarkSensor() until we get enough readings to have a valid average.
+  // Put the current DARK sensor boolean in prevDark.
+  while (!pollDarkSensor()) {
+    delay(1);
   }
 
-  // Check that the sensor value has been stable (debounced) for long enough.
-  unsigned int sensorStabilityTime = now - lastDarkSensorChangeTime;
-  bool sensorIsStable = sensorStabilityTime >= DARK_SENSOR_DEBOUNCE_MILLIS;
-
-  // Schmitt-trigger for state changes: even on a stable sensor, don't change state
-  // back and forth particularly quickly; commit to a new state for a reasonable dwell time.
-  unsigned int stateDuration = now - lastDarkStateChangeTime;
-  bool stateDwellLongEnough = stateDuration > DARK_SENSOR_STATE_DELAY_MILLIS;
-
-  // In order to change state, we need a stable sensor AND enough time in the prior state.
-  bool changeAllowed = sensorIsStable && stateDwellLongEnough;
-
-  if (changeAllowed && isDark && macroState == MS_WAITING) {
-    // Time to start the show.
-    lastDarkStateChangeTime = now;
-    setMacroStateRunning();
-  } else if (changeAllowed && !isDark && macroState == MS_RUNNING) {
-    // The sun has found us; pack up for the day.
-    lastDarkStateChangeTime = now;
+  if (prevDark == 0) {
     setMacroStateWaiting();
+  } else {
+    setMacroStateRunning();
   }
 }
 
@@ -219,9 +279,10 @@ void setMacroStateWaiting() {
   attachStandardButtonHandlers();
   allSignsOff();
   // TODO(aaron): Put the ATSAMD51 to sleep for a while?
-  // TODO(aaron): If we do go to sleep, we need to enable an interrupt to watch for
-  // the BTN_INT gpio signal. Otherwise we'll miss any keypresses while in sleep (meaning
-  // you won't be able to enter admin mode during the day).
+  // TODO(aaron): If we do go to sleep, we need to enable an interrupt to watch for the
+  // BTN_INT gpio signal. (And an INT on the 9th button.) Otherwise we'll miss any
+  // keypresses while in sleep (meaning you won't be able to enter admin mode during the
+  // day).
 }
 
 /**
@@ -291,7 +352,7 @@ void loop() {
   default:
     DBGPRINTI("ERROR -- unknown MacroState:", macroState);
     DBGPRINT("Reverting to running state");
-    macroState = MS_RUNNING;
+    setMacroStateRunning();
   }
 
   // At the end of each loop iteration, sleep until this iteration is LOOP_MICROS long.

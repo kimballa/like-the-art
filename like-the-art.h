@@ -37,6 +37,14 @@ using namespace std;
   #define TARGET_INSTALL Breadboard
 #endif // if IS_TARGET_PRODUCTION
 
+// Define REPORT_ANALOG_DARK_SENSOR if you want the analog read value
+// of the DARK sensor (avg of AVG_NUM_DARK_SAMPLES readings) reported on
+// the debug console.
+#define REPORT_ANALOG_DARK_SENSOR
+
+// Number of DARK readings to average together to get a useful reading.
+constexpr uint8_t AVG_NUM_DARK_SAMPLES = 32;
+
 /** Every loop iteration lasts for 10ms. */
 constexpr unsigned int LOOP_MICROS = 10 * 1000;
 constexpr unsigned int LOOP_MILLIS = LOOP_MICROS / 1000;
