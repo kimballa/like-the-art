@@ -114,11 +114,11 @@ void setup() {
   // Connect to I2C parallel bus expanders for signs.
   Wire.begin();
   parallelBank0.init(0 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
-  // TODO(aaron): Enable parallel bus expander for full board.
-  //parallelBank1.init(1 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
-  // Turn off signs asap so we don't spend too much time in all-on state.
-  parallelBank0.write(0);
-  //parallelBank1.write(0);
+  parallelBank0.write(0); // Turn off signs asap so we don't spend too much time in all-on state.
+#if IS_TARGET_PRODUCTION == 1
+  parallelBank1.init(1 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
+  parallelBank1.write(0);
+#endif // I2C bank 1 only in prod, not in breadboard.
 
   printWhyLastReset();
 

@@ -91,28 +91,64 @@ const char *const W_QUESTION = "?";
 static constexpr unsigned int SENTENCE_LEN = 64; // At most 62 chars + \0 in the sentence.
 static char activeSentence[SENTENCE_LEN];
 
+// Some macro hack to use TARGET_INSTALL to define the sign setup method to use.
+// Inner macro to assist setupSignsFor(); expanding X to a macro requires indirection. See:
+// https://stackoverflow.com/questions/1489932/how-can-i-concatenate-twice-with-the-c-preprocessor-and-expand-a-macro-as-in-ar
+#define __setupSignsForInner(X, bank0, bank1) (setupSignsFor ## X)(bank0, bank1)
+// Macro that calls the appropriate setupSignsForX() method:
+#define setupSignsFor(X, bank0, bank1) __setupSignsForInner(X, bank0, bank1)
+
+// Setup the signs array to have channels reflecting the
+// connections available on the breadboard model (4 standard THT LEDs).
+static void setupSignsForBreadboard(I2CParallel &bank0, I2CParallel &bank1) {
+  signs.emplace_back(0, W_WHY,  new I2CSC(bank0, 0));
+  signs.emplace_back(1, W_DO,   new I2CSC(bank0, 1));
+  signs.emplace_back(2, W_YOU,  new I2CSC(bank0, 2));
+  signs.emplace_back(3, W_DONT, new I2CSC(bank0, 3));
+
+  signs.emplace_back(4, W_HAVE,       new NSC());
+  signs.emplace_back(5, W_TO,         new NSC());
+  signs.emplace_back(6, W_I,          new NSC());
+  signs.emplace_back(7, W_LIKE,       new NSC());
+  signs.emplace_back(8, W_LOVE,       new NSC());
+  signs.emplace_back(9, W_HATE,       new NSC());
+  signs.emplace_back(10, W_BM,        new NSC());
+  signs.emplace_back(11, W_ALL,       new NSC());
+  signs.emplace_back(12, W_THE,       new NSC());
+  signs.emplace_back(13, W_ART,       new NSC());
+  signs.emplace_back(14, W_BANG,      new NSC());
+  signs.emplace_back(15, W_QUESTION,  new NSC());
+}
+
+// Setup the signs array to have channels reflecting the actual
+// production connections through the PCBs to all 16 LED neon signs.
+static void setupSignsForProduction(I2CParallel &bank0, I2CParallel &bank1) {
+  // Note that the production channels are NOT wired in order in I2C; see schematic.
+  signs.emplace_back(0, W_WHY,  new I2CSC(bank0, 2));
+  signs.emplace_back(1, W_DO,   new I2CSC(bank0, 0));
+  signs.emplace_back(2, W_YOU,  new I2CSC(bank0, 1));
+  signs.emplace_back(3, W_DONT, new I2CSC(bank0, 3));
+  signs.emplace_back(4, W_HAVE, new I2CSC(bank0, 4));
+  signs.emplace_back(5, W_TO,   new I2CSC(bank0, 6));
+  signs.emplace_back(6, W_I,    new I2CSC(bank0, 5));
+  signs.emplace_back(7, W_LIKE, new I2CSC(bank0, 7));
+
+  signs.emplace_back(8, W_LOVE,       new I2CSC(bank1, 2));
+  signs.emplace_back(9, W_HATE,       new I2CSC(bank1, 0));
+  signs.emplace_back(10, W_BM,        new I2CSC(bank1, 1));
+  signs.emplace_back(11, W_ALL,       new I2CSC(bank1, 3));
+  signs.emplace_back(12, W_THE,       new I2CSC(bank1, 4));
+  signs.emplace_back(13, W_ART,       new I2CSC(bank1, 6));
+  signs.emplace_back(14, W_BANG,      new I2CSC(bank1, 5));
+  signs.emplace_back(15, W_QUESTION,  new I2CSC(bank1, 7));
+}
+
 void setupSigns(I2CParallel &bank0, I2CParallel &bank1) {
   // Define Signs with bindings to I/O channels.
   signs.clear();
   signs.reserve(NUM_SIGNS);
-  // TODO(aaron): Bind signs to actual production channels.
-  // Remember that the production channels are NOT wired in order in I2C; check schematic.
-  signs.emplace_back(0, W_WHY, new I2CSC(bank0, 0));
-  signs.emplace_back(1, W_DO, new I2CSC(bank0, 1));
-  signs.emplace_back(2, W_YOU, new I2CSC(bank0, 2));
-  signs.emplace_back(3, W_DONT, new I2CSC(bank0, 3));
-  signs.emplace_back(4, W_HAVE, new NSC());
-  signs.emplace_back(5, W_TO, new NSC());
-  signs.emplace_back(6, W_I, new NSC());
-  signs.emplace_back(7, W_LIKE, new NSC());
-  signs.emplace_back(8, W_LOVE, new NSC());
-  signs.emplace_back(9, W_HATE, new NSC());
-  signs.emplace_back(10, W_BM, new NSC());
-  signs.emplace_back(11, W_ALL, new NSC());
-  signs.emplace_back(12, W_THE, new NSC());
-  signs.emplace_back(13, W_ART, new NSC());
-  signs.emplace_back(14, W_BANG, new NSC());
-  signs.emplace_back(15, W_QUESTION, new NSC());
+
+  setupSignsFor(TARGET_INSTALL, bank0, bank1); // Calls appropriate setupSignsForX() above.
 }
 
 void allSignsOff() {

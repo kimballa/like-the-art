@@ -26,6 +26,17 @@ using namespace std;
 #include "saveconfig.h"
 #include "animation.h"
 
+
+// Define this to be 1 for production, 0 for breadboard.
+#define IS_TARGET_PRODUCTION 1
+
+// Where is the Arduino installed? Valid values are 'Breadboard' or 'Production'
+#if IS_TARGET_PRODUCTION == 1
+  #define TARGET_INSTALL Production
+#else
+  #define TARGET_INSTALL Breadboard
+#endif // if IS_TARGET_PRODUCTION
+
 /** Every loop iteration lasts for 10ms. */
 constexpr unsigned int LOOP_MICROS = 10 * 1000;
 constexpr unsigned int LOOP_MILLIS = LOOP_MICROS / 1000;
