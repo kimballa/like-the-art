@@ -207,7 +207,7 @@ static void btnExitAdminMode(uint8_t btnId, uint8_t btnState) {
   if (isConfigDirty) {
     saveFieldConfig(&fieldConfig);
   }
-  activeAnimation.setParameters(Sentence(0, 0x7), EF_BLINK, 0, durationForBlinkCount(3));
+  activeAnimation.setParameters(Sentence(0, 0x7), EF_BLINK_FAST, 0, durationForFastBlinkCount(3));
   activeAnimation.start();
   DBGPRINT("Exiting admin menu...");
 }
@@ -229,7 +229,7 @@ static void btnCtrlAltDelete(uint8_t btnId, uint8_t btnState) {
   }
 
   // Set up blinking animation before we reboot.
-  activeAnimation.setParameters(Sentence(0, 0x7), EF_BLINK, 0, durationForBlinkCount(5));
+  activeAnimation.setParameters(Sentence(0, 0x7), EF_BLINK_FAST, 0, durationForFastBlinkCount(5));
   activeAnimation.start();
   DBGPRINT("User requested reboot");
 }
