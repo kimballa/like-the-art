@@ -41,6 +41,9 @@ inline constexpr uint32_t durationForFastBlinkCount(const uint32_t blinkCount) {
   return blinkCount * FAST_BLINK_PHASE_MILLIS * 2; // one on + one off phase per blink = 2 * phase_millis.
 }
 
+// The EF_MELT animation will melt away one word every 'n' milliseconds configured here:
+constexpr unsigned int MELT_ONE_WORD_MILLIS = 250;
+
 // In intro-hold-outro mode animations, the 3 phases have specific names:
 constexpr unsigned int PHASE_INTRO = 0;
 constexpr unsigned int PHASE_HOLD = 1;
@@ -119,6 +122,12 @@ private:
   // EF_GLOW
   uint32_t _glowStepSize;
   unsigned int _glowCurrentBrightness;
+
+  // EF_MELT
+  unsigned int _nextMeltTime; // the phaseRemainingMillis value when we should next melt a word.
+  unsigned int _availableMeltSet;  // the bitmask of words we are allowed to melt in this phase.
+  unsigned int _numWordsLeftToMelt; // number of words in available melt set
+  void _meltWord();
 };
 
 extern Animation activeAnimation;

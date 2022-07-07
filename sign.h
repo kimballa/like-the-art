@@ -89,6 +89,7 @@ extern vector<Sign> signs;
 extern "C" {
   extern void setupSigns(I2CParallel &bank0, I2CParallel &bank1);
   extern void allSignsOff(); // Turn all signs off
+  extern void allSignsOn(); // Turn all signs on
   extern void configMaxPwm(); // Set current PWM level to the configured max brightness.
   extern uint32_t getMaxPwmDutyCycle();
   extern void logSentence(uint32_t sentenceBits);

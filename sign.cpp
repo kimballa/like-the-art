@@ -157,6 +157,12 @@ void allSignsOff() {
   }
 }
 
+void allSignsOn() {
+  for (auto &sign : signs) {
+    sign.enable();
+  }
+}
+
 /** Print a log msg w/ the signs that would be active in the specified sentence. */
 void logSentence(uint32_t sentenceBits) {
   loggedActiveSignBits = sentenceBits;

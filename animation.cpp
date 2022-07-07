@@ -37,6 +37,8 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
   _isIntroHoldOutro = false;
 
   uint32_t framesPerPhase;
+  uint32_t numWordsToMelt;
+  uint32_t meltHoldPhase;
 
   switch(_effect) {
   case EF_APPEAR:
@@ -99,7 +101,20 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
     // Start with all words on and "melt away" words one-by-one to reveal the
     // real sentence. The sentence holds, and then individual words turn off
     // to fade to black for outro.
-    DBGPRINT("TODO: EF_MELT");
+    numWordsToMelt = NUM_SIGNS - s.getNumWords();
+    if (NUM_SIGNS * MELT_ONE_WORD_MILLIS > milliseconds) {
+      // This is going to be an over-length animation. Just do a quick hold.
+      meltHoldPhase = 1000;
+    } else {
+      // All time not spent melting is just in hold.
+      meltHoldPhase = milliseconds - (NUM_SIGNS * MELT_ONE_WORD_MILLIS);
+    }
+
+    _setupIntroHoldOutro(numWordsToMelt * MELT_ONE_WORD_MILLIS,
+                         meltHoldPhase,
+                         s.getNumWords() * MELT_ONE_WORD_MILLIS);
+
+    DBGPRINTU("New animation: EF_MELT", milliseconds);
     break;
   default:
     DBGPRINTU("Unknown effect id", (uint32_t)_effect);
@@ -325,7 +340,42 @@ void Animation::next() {
     break;
 
   case EF_MELT:
-    DBGPRINT("TODO: EF_MELT");
+    if (_curPhaseNum == PHASE_INTRO) {
+      if (_isFirstPhaseTic) {
+        configMaxPwm();
+
+        // When the intro phase starts, the entire board will be lit.
+        // Queue up the first melt sub-phase to start one melt interval after that.
+        _nextMeltTime = _ihoIntroDuration - MELT_ONE_WORD_MILLIS;
+        _numWordsLeftToMelt = NUM_SIGNS - _sentence.getNumWords();
+        // We need to melt away all the signs...
+        _availableMeltSet = (1 << NUM_SIGNS) - 1;
+        // ... except those in the current sentence.
+        _availableMeltSet &= ~(_sentence.getSignBits());
+      }
+
+      if (_phaseRemainingMillis <= _nextMeltTime) {
+        _meltWord();
+      }
+    } else if (_curPhaseNum == PHASE_HOLD) {
+      if (_isFirstPhaseTic) {
+        // Make sure we're setup correctly in case something got missed in intro phase.
+        allSignsOff();
+        configMaxPwm();
+        _sentence.enable();
+      }
+    } else if (_curPhaseNum == PHASE_OUTRO) {
+      if (_isFirstPhaseTic) {
+        // Queue up a melt to begin immediately; we now start removing words from the real sentence.
+        _nextMeltTime = _phaseRemainingMillis;
+        _availableMeltSet = _sentence.getSignBits(); // We want to melt the sentence itself.
+        _numWordsLeftToMelt = _sentence.getNumWords();
+      }
+
+      if (_phaseRemainingMillis <= _nextMeltTime) {
+        _meltWord();
+      }
+    }
     break;
 
   default:
@@ -346,6 +396,39 @@ void Animation::next() {
   }
 
   _isFirstPhaseTic = false;
+}
+
+/* Helper function for EF_MELT animation. Pick a random word to turn off. */
+void Animation::_meltWord() {
+  // Melt away a word. Use random(_numWordsLeftToMelt) to get an idx into
+  // the i'th lit word we don't want to preserve as part of the sentence (tracked as a bitmask
+  // in _availableMeltSet).
+
+  // Melt the idx'th word in the melt set.
+  unsigned int validWordIdx = random(_numWordsLeftToMelt) + 1;
+  unsigned int numWordsSeen = 0;
+  unsigned int meltWordId = 0;
+  for (unsigned int i = 0; i < NUM_SIGNS; i++) {
+    if (_availableMeltSet & (1 << i)) {
+      numWordsSeen++;
+      if (numWordsSeen == validWordIdx) {
+        meltWordId = i; // we found the word to disable.
+        break;
+      }
+    }
+  }
+
+  // We found our target; turn it off.
+  signs[meltWordId].disable();
+
+  // This word is no longer available for melting.
+  _availableMeltSet &= ~(1 << meltWordId);
+  _numWordsLeftToMelt--;
+
+  // Set the timer for the next melt tick.
+  if (_numWordsLeftToMelt > 0) {
+    _nextMeltTime -= MELT_ONE_WORD_MILLIS;
+  }
 }
 
 // Halt the animation sequence even if there's part remaining.

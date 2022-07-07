@@ -186,9 +186,7 @@ static void btnLightEntireBoard(uint8_t btnId, uint8_t btnState) {
   adminState = AS_ALL_SIGNS_ON;
   activeAnimation.stop();
   configMaxPwm();
-  for (auto &sign: signs) {
-    sign.enable();
-  }
+  allSignsOn();
   DBGPRINT("Turning on all signs");
 }
 
