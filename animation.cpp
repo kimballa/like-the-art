@@ -78,12 +78,16 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
   case EF_BUILD:
     // Have N phases where N = number of words in sentence; in phase k the first k words of the
     // sentence are lit.
-    DBGPRINT("TODO: EF_BUILD");
+    _phaseCountRemaining = s.getNumWords();
+    _phaseDuration = milliseconds / _phaseCountRemaining;
+    DBGPRINTU("New animation: EF_BUILD", milliseconds);
     break;
   case EF_SNAKE:
     // Like BUILD, but also "unbuild" by then turning off the 1st word, then the
     // 2nd... until all is dark.
-    DBGPRINT("TODO: EF_SNAKE");
+    _phaseCountRemaining = s.getNumWords() * 2;
+    _phaseDuration = milliseconds / _phaseCountRemaining;
+    DBGPRINTU("New animation: EF_SNAKE", milliseconds);
     break;
   case EF_SLIDE_TO_END:
     // Light pulse 'zips' through all words on the board to the last word in the sentence and sticks
@@ -164,6 +168,8 @@ void Animation::next() {
   unsigned int numWordsSeen;
   unsigned int highlightWord;
   unsigned int i;
+  unsigned int targetWordIdx;
+  unsigned int numWordsInSentence;
 
   switch(_effect) {
   case EF_APPEAR:
@@ -218,6 +224,7 @@ void Animation::next() {
     break;
 
   case EF_ONE_AT_A_TIME:
+    // In phase 'N', light up only the N+1'th word in the sentence.
     if (_isFirstPhaseTic) {
       allSignsOff();
       configMaxPwm();
@@ -227,13 +234,14 @@ void Animation::next() {
       // Find the n'th word.
       numWordsSeen = 0;
       highlightWord = 0;
+      // In phase 0 we want to choose the 1st word, and so on...
+      targetWordIdx = _curPhaseNum + 1;
       for (i = 0; i < NUM_SIGNS; i++) {
         if (signBits & (1 << i)) {
           numWordsSeen++;
         }
 
-        // In phase 0 we want to choose the 1st word, and so on...
-        if (numWordsSeen == _curPhaseNum + 1) {
+        if (numWordsSeen == targetWordIdx) {
           // This sign bit is the word to highlight.
           highlightWord = i;
         }
@@ -244,11 +252,72 @@ void Animation::next() {
     break;
 
   case EF_BUILD:
-    DBGPRINT("TODO: EF_BUILD");
+    // Logic very similar to ONE_AT_A_TIME but previously-shown words remain lit.
+    if (_isFirstPhaseTic) {
+      configMaxPwm();
+
+      // Turn on the N'th word in the sentence.
+      signBits = _sentence.getSignBits();
+      // Find the n'th word.
+      numWordsSeen = 0;
+      highlightWord = 0;
+      // In phase 0 we want to choose the 1st word, and so on...
+      targetWordIdx = _curPhaseNum + 1;
+      for (i = 0; i < NUM_SIGNS; i++) {
+        if (signBits & (1 << i)) {
+          numWordsSeen++;
+        }
+
+        if (numWordsSeen == targetWordIdx) {
+          // This sign bit is the word to highlight.
+          highlightWord = i;
+        }
+      }
+
+      signs[highlightWord].enable();
+    }
     break;
 
   case EF_SNAKE:
-    DBGPRINT("TODO: EF_SNAKE");
+    // Logic for the first half of the phases is identical to EF_BUILD; we then repeat
+    // the loop, turning words off one at a time.
+    if (_isFirstPhaseTic) {
+      configMaxPwm();
+
+      // Turn on [or off] the N'th word in the sentence.
+      signBits = _sentence.getSignBits();
+      // Find the n'th word.
+      numWordsSeen = 0;
+      highlightWord = 0;
+      numWordsInSentence = _sentence.getNumWords();
+      // In phase 0 we want to choose the 1st word, and so on...
+      if (_curPhaseNum < numWordsInSentence) {
+        // We are turning words on.
+        targetWordIdx = _curPhaseNum + 1;
+      } else {
+        // We are in the second meta-phase, turning words off, starting at the beginning
+        // of the sign and working our way to the end of the sentence.
+        targetWordIdx = _curPhaseNum + 1 - numWordsInSentence;
+      }
+
+      for (i = 0; i < NUM_SIGNS; i++) {
+        if (signBits & (1 << i)) {
+          numWordsSeen++;
+        }
+
+        if (numWordsSeen == targetWordIdx) {
+          // This sign bit is the word to highlight or turn off.
+          highlightWord = i;
+        }
+      }
+
+      if (_curPhaseNum < numWordsInSentence) {
+        signs[highlightWord].enable();
+      } else {
+        signs[highlightWord].disable();
+      }
+    }
+
     break;
 
   case EF_SLIDE_TO_END:
