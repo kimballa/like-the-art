@@ -7,6 +7,7 @@ enum Effect {
   EF_APPEAR,         // Just turn on the words and hold them there.
   EF_GLOW,           // Fade up from nothing, hold high, fade back to zero.
   EF_BLINK,          // Behold the cursed <blink> tag!
+  EF_BLINK_FAST,
   EF_ONE_AT_A_TIME,  // Highlight each word in series, turning off word n before showing n+1.
   EF_BUILD,          // Light up incrementally more words one at a time left-to-right
   EF_SNAKE,          // Like BUILD, but also "unbuild" by then turning off the 1st word, then the
@@ -14,6 +15,9 @@ enum Effect {
   EF_SLIDE_TO_END,   // Make a light pulse "zip" through all the words until reaching the last
                      // word in the phrase, then that word stays on. Then zip the 2nd-to-last
                      // word...
+  EF_MELT,           // Start with all words on and "melt away" words one-by-one to reveal the
+                     // real sentence. The sentence holds, and then individual words turn off
+                     // to fade to black for outro.
 
 // TODO(aaron): These are effectively layered effects that should be possible to 'or' on top of
 // the preceeding effects.
@@ -27,9 +31,20 @@ enum Effect {
 constexpr unsigned int NUM_EFFECTS = (unsigned int)(Effect::EF_ALT_LOVE_HATE) + 1;
 
 constexpr unsigned int BLINK_PHASE_MILLIS = 1000;
-inline uint32_t durationForBlinkCount(uint32_t blinkCount) {
+constexpr unsigned int FAST_BLINK_PHASE_MILLIS = 250;
+
+inline constexpr uint32_t durationForBlinkCount(const uint32_t blinkCount) {
   return blinkCount * BLINK_PHASE_MILLIS * 2; // one on + one off phase per blink = 2 * phase_millis.
 }
+
+inline constexpr uint32_t durationForFastBlinkCount(const uint32_t blinkCount) {
+  return blinkCount * FAST_BLINK_PHASE_MILLIS * 2; // one on + one off phase per blink = 2 * phase_millis.
+}
+
+// In intro-hold-outro mode animations, the 3 phases have specific names:
+constexpr unsigned int PHASE_INTRO = 0;
+constexpr unsigned int PHASE_HOLD = 1;
+constexpr unsigned int PHASE_OUTRO = 2;
 
 /**
  * An animation makes a sentence appear with a specified effect.
@@ -87,6 +102,17 @@ private:
   unsigned int _phaseRemainingMillis; // millis remaining in current phase
   unsigned int _phaseCountRemaining; // number of phases to go.
   unsigned int _curPhaseNum; // sequentially incrementing counter thru phases.
+
+  bool _isIntroHoldOutro; // intro-hold-outro mode is 3 phases which may not
+                          // have the same length. Each phase duration is initialized
+                          // from the variables below.
+
+  unsigned int _ihoIntroDuration;
+  unsigned int _ihoHoldDuration;
+  unsigned int _ihoOutroDuration;
+
+  // Helper method to setup an intro-hold-outro style animation pattern.
+  void _setupIntroHoldOutro(unsigned int introTime, unsigned int holdTime, unsigned int outroTime);
 
   //// Effect-specific state ////
 
