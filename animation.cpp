@@ -58,28 +58,43 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
     DBGPRINTU("New animation: EF_GLOW", milliseconds);
     break;
   case EF_BLINK:
+    // Simple blinking effect; an even number of phases alternating on & off, of fixed duration.
     _phaseDuration = BLINK_PHASE_MILLIS;
     _phaseCountRemaining = (milliseconds + BLINK_PHASE_MILLIS - 1) / BLINK_PHASE_MILLIS;
     DBGPRINTU("New animation: EF_BLINK", milliseconds);
     break;
   case EF_BLINK_FAST:
+    // Like EF_BLINK but with faster phases.
     _phaseDuration = FAST_BLINK_PHASE_MILLIS;
     _phaseCountRemaining = (milliseconds + FAST_BLINK_PHASE_MILLIS - 1) / FAST_BLINK_PHASE_MILLIS;
     DBGPRINTU("New animation: EF_BLINK_FAST", milliseconds);
     break;
   case EF_ONE_AT_A_TIME:
-    DBGPRINT("TODO: EF_ONE_AT_A_TIME");
+    // Have N phases where N = number of words in sentence. One word at a time is lit.
+    _phaseCountRemaining = s.getNumWords();
+    _phaseDuration = milliseconds / _phaseCountRemaining;
+    DBGPRINTU("New animation: EF_ONE_AT_A_TIME", milliseconds);
     break;
   case EF_BUILD:
+    // Have N phases where N = number of words in sentence; in phase k the first k words of the
+    // sentence are lit.
     DBGPRINT("TODO: EF_BUILD");
     break;
   case EF_SNAKE:
+    // Like BUILD, but also "unbuild" by then turning off the 1st word, then the
+    // 2nd... until all is dark.
     DBGPRINT("TODO: EF_SNAKE");
     break;
   case EF_SLIDE_TO_END:
+    // Light pulse 'zips' through all words on the board to the last word in the sentence and sticks
+    // there. Then another light pulse zips through all words starting @ first to the 2nd to last
+    // word in the sentence...
     DBGPRINT("TODO: EF_SLIDE_TO_END");
     break;
   case EF_MELT:
+    // Start with all words on and "melt away" words one-by-one to reveal the
+    // real sentence. The sentence holds, and then individual words turn off
+    // to fade to black for outro.
     DBGPRINT("TODO: EF_MELT");
     break;
   default:
@@ -145,6 +160,10 @@ void Animation::next() {
   }
 
   // Actually perform the appropriate frame advance action for the specified effect.
+  unsigned int signBits;
+  unsigned int numWordsSeen;
+  unsigned int highlightWord;
+  unsigned int i;
 
   switch(_effect) {
   case EF_APPEAR:
@@ -199,7 +218,29 @@ void Animation::next() {
     break;
 
   case EF_ONE_AT_A_TIME:
-    DBGPRINT("TODO: EF_ONE_AT_A_TIME");
+    if (_isFirstPhaseTic) {
+      allSignsOff();
+      configMaxPwm();
+
+      // Show the N'th word in the sentence.
+      signBits = _sentence.getSignBits();
+      // Find the n'th word.
+      numWordsSeen = 0;
+      highlightWord = 0;
+      for (i = 0; i < NUM_SIGNS; i++) {
+        if (signBits & (1 << i)) {
+          numWordsSeen++;
+        }
+
+        // In phase 0 we want to choose the 1st word, and so on...
+        if (numWordsSeen == _curPhaseNum + 1) {
+          // This sign bit is the word to highlight.
+          highlightWord = i;
+        }
+      }
+
+      signs[highlightWord].enable();
+    }
     break;
 
   case EF_BUILD:

@@ -8,9 +8,12 @@ public:
   Sentence(unsigned int id, unsigned int signs): _id(id), _signs(signs) { };
 
   /** Return number of words in the sentence */
-  unsigned int getNumWords() const;
+  unsigned int getNumWords() const { return __builtin_popcount(_signs); };
 
   unsigned int id() const { return _id; };
+
+  /** Return the bit array representing the signs in the sentence. */
+  unsigned int getSignBits() const { return _signs; };
 
   /** Light up the sentence (simple "appear" effect) */
   void enable();

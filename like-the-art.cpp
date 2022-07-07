@@ -349,7 +349,7 @@ static void loopStateRunning() {
   }
 
   // Need to choose a new animation
-  Effect e = (Effect)random(3); // appear, glow, or blink.
+  Effect e = (Effect)random(5); // appear, glow, blink, fast blink, one-at-a-time.
   Sentence s(0, random(16)); // light up some combo of the 4 LEDs we have.
 
   activeAnimation.setParameters(s, e, 0, 6000); // start a new animation for 6 seconds
