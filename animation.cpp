@@ -20,11 +20,72 @@ void Animation::_setupIntroHoldOutro(unsigned int introTime, unsigned int holdTi
   _phaseCountRemaining = 3; // definitionally a 3-phase animation.
 }
 
+/** Return the optimal duration (in millis) for an Animation of the specified sentence and effect. */
+uint32_t Animation::getOptimalDuration(const Sentence &s, const Effect e, const uint32_t flags) {
+  uint32_t i;
+  uint32_t sentenceBits;
+  uint32_t positionSum;
+
+  switch(e) {
+  case EF_APPEAR:
+    return 5000;  // Show the sentence for 5 seconds.
+  case EF_GLOW:
+    return 5000;  // 1250 ms glow-up, 2500ms hold, 1250 ms glow-down
+  case EF_BLINK:
+    // approx 6 seconds total (1s on / 1s off x 3 blinks)
+    return durationForBlinkCount(3);
+  case EF_BLINK_FAST:
+    // approx 4 seconds total (250ms on / 250 ms off x 8 blinks)
+    return durationForFastBlinkCount(8);
+  case EF_ONE_AT_A_TIME:
+    return s.getNumWords() * 500; // 1/2 sec of each word in sentence.
+  case EF_BUILD:
+    return s.getNumWords() * 500; // words in sentence light up 1/2 sec apart.
+  case EF_SNAKE:
+    return 2 * s.getNumWords() * 500; // words in sentence light up and tear down 1/2 sec apart.
+  case EF_SLIDE_TO_END:
+    // Each word lights up by zipping through all preceeding words. (O(n^2) behavior.)
+    // So the ids/positions of the words in the sentence give the proportion of time required
+    // for each word -- plus a 'hold time' once we arrive at the word.
+    positionSum = 0;
+    sentenceBits = s.getSignBits();
+    for (i = 0; i < NUM_SIGNS; i++) {
+      if (sentenceBits & (1 << i)) {
+        positionSum += i;
+      }
+    }
+
+    // (zip-in times + per-word holds) + (2s whole-sentence hold) + (zip-out times)
+    return (positionSum * SLIDE_TO_END_PER_WORD_ZIP + s.getNumWords() * SLIDE_TO_END_PER_WORD_HOLD)
+        + SLIDE_TO_END_DEFAULT_SENTENCE_HOLD
+        + (positionSum * SLIDE_TO_END_PER_WORD_ZIP);
+  case EF_MELT:
+    // time for all words to melt plus 3s hold time
+    return MELT_ONE_WORD_MILLIS * NUM_SIGNS + 3000;
+  default:
+    DBGPRINTU("Unknown effect in getOptimalDuration():", (uint32_t)e);
+    DBGPRINT("Returning default duration of 2000ms.");
+    return 2000;
+  }
+}
+
+/**
+ * Set the parameters for the next animation cycle. Based on the specified sentence, effect, and
+ * duration, tees up the internal plan to execute the animation frames.
+ *
+ * Effects can be applied over a flexible range of durations. For a given effect and sentence, there
+ * may be an "optimal" duration for an aesthetically pleasing effect. Pass milliseconds==0 to use
+ * the result of getOptimalDuration().
+ */
 void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds) {
 
   if (_isRunning) {
     // We continue to do what was asked of us, but let operator know last animation was incomplete.
     DBGPRINT("Warning: Resetting animation parameters without finishing last animation");
+  }
+
+  if (milliseconds == 0) {
+    milliseconds = getOptimalDuration(s, e, flags);
   }
 
   _isRunning = false;
@@ -38,7 +99,11 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
 
   uint32_t framesPerPhase;
   uint32_t numWordsToMelt;
-  uint32_t meltHoldPhase;
+  uint32_t holdPhaseTime;
+  uint32_t setupTime;
+  uint32_t teardownTime;
+  uint32_t positionSum, sentenceBits;
+  unsigned int i;
 
   switch(_effect) {
   case EF_APPEAR:
@@ -95,7 +160,37 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
     // Light pulse 'zips' through all words on the board to the last word in the sentence and sticks
     // there. Then another light pulse zips through all words starting @ first to the 2nd to last
     // word in the sentence...
-    DBGPRINT("TODO: EF_SLIDE_TO_END");
+    //
+    // There is a brief hold when each zip arrives at its destination word.
+    //
+    // There is a full hold with the sentence on after they're all illuminated.
+    //
+    // Then all the word lights "zip back" to left.
+    //
+    // This effect has fixed timing for light zips and per-word holds; any additional time
+    // is used for the full-sentence hold. A full sentence hold of at least 1s is enforced.
+    // If `milliseconds` is too short for minimum timing, it will be disregarded.
+    positionSum = 0;
+    sentenceBits = s.getSignBits();
+    for (i = 0; i < NUM_SIGNS; i++) {
+      if (sentenceBits & (1 << i)) {
+        positionSum += i;
+      }
+    }
+
+    // (zip-in times + per-word holds) + (2s whole-sentence hold) + (zip-out times)
+    setupTime = (positionSum * SLIDE_TO_END_PER_WORD_ZIP + s.getNumWords() * SLIDE_TO_END_PER_WORD_HOLD);
+    teardownTime = (positionSum * SLIDE_TO_END_PER_WORD_ZIP);
+    if (setupTime + teardownTime + SLIDE_TO_END_MINIMUM_SENTENCE_HOLD < milliseconds) {
+      // Enforce a minimum 1s hold phase.
+      holdPhaseTime = SLIDE_TO_END_MINIMUM_SENTENCE_HOLD;
+    } else {
+      // If milliseconds is bigger than the minimum, allocate all the remaining time to hold phase.
+      holdPhaseTime = milliseconds - setupTime - teardownTime;
+    }
+    _setupIntroHoldOutro(setupTime, holdPhaseTime, teardownTime);
+
+    DBGPRINTU("New animation: EF_SLIDE_TO_END", setupTime + holdPhaseTime + teardownTime);
     break;
   case EF_MELT:
     // Start with all words on and "melt away" words one-by-one to reveal the
@@ -104,14 +199,14 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
     numWordsToMelt = NUM_SIGNS - s.getNumWords();
     if (NUM_SIGNS * MELT_ONE_WORD_MILLIS > milliseconds) {
       // This is going to be an over-length animation. Just do a quick hold.
-      meltHoldPhase = 1000;
+      holdPhaseTime = 1000;
     } else {
       // All time not spent melting is just in hold.
-      meltHoldPhase = milliseconds - (NUM_SIGNS * MELT_ONE_WORD_MILLIS);
+      holdPhaseTime = milliseconds - (NUM_SIGNS * MELT_ONE_WORD_MILLIS);
     }
 
     _setupIntroHoldOutro(numWordsToMelt * MELT_ONE_WORD_MILLIS,
-                         meltHoldPhase,
+                         holdPhaseTime,
                          s.getNumWords() * MELT_ONE_WORD_MILLIS);
 
     DBGPRINTU("New animation: EF_MELT", milliseconds);
@@ -125,10 +220,22 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
     break;
   }
 
+  if (_phaseCountRemaining == 0) {
+    DBGPRINT("Warning: animation planner set up 0 phase count.");
+  }
+
 }
 
 // Start the animation sequence.
 void Animation::start() {
+  if (_phaseCountRemaining == 0) {
+    DBGPRINT("Warning: _phaseCountRemaining is 0 in start(); no animation to start.");
+    _isRunning = false;
+    _phaseRemainingMillis = 0;
+    _curPhaseNum = 0;
+    return;
+  }
+
   _isRunning = true;
   _curPhaseNum = 0;
   _isFirstPhaseTic = true;
@@ -141,6 +248,7 @@ void Animation::start() {
   }
 
   allSignsOff(); // All animations start with a clean slate.
+  configMaxPwm();
   next(); // Do first frame of first phase.
 }
 
@@ -148,6 +256,9 @@ void Animation::start() {
 void Animation::next() {
   if (!_isRunning || _phaseCountRemaining == 0) {
     DBGPRINT("Warning: Animation is not running; no work to do in next()");
+    // Somehow these variables got out-of-sync; ensure isRunning() returns false.
+    _phaseCountRemaining = 0;
+    _isRunning = false;
     return;
   }
 
@@ -191,7 +302,6 @@ void Animation::next() {
     // Single phase which lasts the entire duration of the effect.
     // On first frame, turn on the signs; and we're done.
     if (_isFirstPhaseTic) {
-      configMaxPwm();
       _sentence.enable();
     }
     break;
@@ -230,7 +340,6 @@ void Animation::next() {
       if (_curPhaseNum % 2 == 0) {
         // Even phase: show
         _sentence.enable();
-        configMaxPwm();
       } else {
         // Odd phase: hide
         _sentence.disable();
@@ -242,7 +351,6 @@ void Animation::next() {
     // In phase 'N', light up only the N+1'th word in the sentence.
     if (_isFirstPhaseTic) {
       allSignsOff();
-      configMaxPwm();
 
       // Show the N'th word in the sentence.
       signBits = _sentence.getSignBits();
@@ -269,8 +377,6 @@ void Animation::next() {
   case EF_BUILD:
     // Logic very similar to ONE_AT_A_TIME but previously-shown words remain lit.
     if (_isFirstPhaseTic) {
-      configMaxPwm();
-
       // Turn on the N'th word in the sentence.
       signBits = _sentence.getSignBits();
       // Find the n'th word.
@@ -297,8 +403,6 @@ void Animation::next() {
     // Logic for the first half of the phases is identical to EF_BUILD; we then repeat
     // the loop, turning words off one at a time.
     if (_isFirstPhaseTic) {
-      configMaxPwm();
-
       // Turn on [or off] the N'th word in the sentence.
       signBits = _sentence.getSignBits();
       // Find the n'th word.
@@ -336,15 +440,35 @@ void Animation::next() {
     break;
 
   case EF_SLIDE_TO_END:
+    if (_curPhaseNum == PHASE_INTRO) {
+      if (_isFirstPhaseTic) {
+        // ****** todo make slide-to-end work. *****
+        DBGPRINT("Error: TODO - SLIDE_TO_END Intro first phase tic not implemented");
+      }
+
+      if (_phaseRemainingMillis <= _nextZipTime) {
+        // todo - zip.....
+        DBGPRINT("Error: TODO - SLIDE_TO_END Intro phase zip not implemented");
+      }
+    } else if (_curPhaseNum == PHASE_HOLD) {
+      if (_isFirstPhaseTic) {
+        // Make sure we're setup correctly in case something got missed in intro phase.
+        allSignsOff();
+        configMaxPwm();
+        _sentence.enable();
+      }
+    } else if (_curPhaseNum == PHASE_OUTRO) {
+      if (_isFirstPhaseTic) {
+      }
+    }
     DBGPRINT("TODO: EF_SLIDE_TO_END");
     break;
 
   case EF_MELT:
     if (_curPhaseNum == PHASE_INTRO) {
       if (_isFirstPhaseTic) {
-        configMaxPwm();
-
         // When the intro phase starts, the entire board will be lit.
+        allSignsOn();
         // Queue up the first melt sub-phase to start one melt interval after that.
         _nextMeltTime = _ihoIntroDuration - MELT_ONE_WORD_MILLIS;
         _numWordsLeftToMelt = NUM_SIGNS - _sentence.getNumWords();
@@ -383,8 +507,14 @@ void Animation::next() {
     if (_isFirstPhaseTic) {
       DBGPRINTU("Unknown effect id in next()?! _effect = ", (uint32_t)_effect);
     }
+    // Just reset to EF_APPEAR state.
+    allSignsOff();
     _sentence.enable();
     configMaxPwm();
+    // And kill this animation.
+    _phaseRemainingMillis = 0;
+    _phaseCountRemaining = 0;
+    _isRunning = false;
     break;
   }
 

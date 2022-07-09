@@ -44,6 +44,12 @@ inline constexpr uint32_t durationForFastBlinkCount(const uint32_t blinkCount) {
 // The EF_MELT animation will melt away one word every 'n' milliseconds configured here:
 constexpr unsigned int MELT_ONE_WORD_MILLIS = 250;
 
+// The SLIDE_TO_END animation uses the following timing:
+constexpr unsigned int SLIDE_TO_END_PER_WORD_ZIP = 100; // a 'light zip' moves thru words at 1x / 100ms
+constexpr unsigned int SLIDE_TO_END_PER_WORD_HOLD = 250; // light zip 'holds' on a its destination word
+constexpr unsigned int SLIDE_TO_END_MINIMUM_SENTENCE_HOLD = 1000;
+constexpr unsigned int SLIDE_TO_END_DEFAULT_SENTENCE_HOLD = 2000;
+
 // In intro-hold-outro mode animations, the 3 phases have specific names:
 constexpr unsigned int PHASE_INTRO = 0;
 constexpr unsigned int PHASE_HOLD = 1;
@@ -81,6 +87,7 @@ public:
   Animation();
 
   void setParameters(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  uint32_t getOptimalDuration(const Sentence &s, const Effect e, const uint32_t flags);
 
   bool isRunning() const { return _isRunning; }
   bool isComplete() const { return !_isRunning && _phaseCountRemaining == 0; };
@@ -122,6 +129,11 @@ private:
   // EF_GLOW
   uint32_t _glowStepSize;
   unsigned int _glowCurrentBrightness;
+
+  // EF_SLIDE_TO_END
+  uint32_t _slideCurZipPosition;  // The sign id where the 'zipping light' currently is.
+  uint32_t _slideCurTargetSignId; // The sign id where the 'zipping light' will rest.
+  unsigned int _nextZipTime;  // Next phaseRemainingMillis when the zip should advance.
 
   // EF_MELT
   unsigned int _nextMeltTime; // the phaseRemainingMillis value when we should next melt a word.
