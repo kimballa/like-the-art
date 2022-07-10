@@ -134,6 +134,7 @@ private:
   uint32_t _slideCurZipPosition;  // The sign id where the 'zipping light' currently is.
   uint32_t _slideCurTargetSignId; // The sign id where the 'zipping light' will rest.
   unsigned int _nextZipTime;  // Next phaseRemainingMillis when the zip should advance.
+  bool _slidePickNextZipTarget();
 
   // EF_MELT
   unsigned int _nextMeltTime; // the phaseRemainingMillis value when we should next melt a word.

@@ -252,6 +252,56 @@ void Animation::start() {
   next(); // Do first frame of first phase.
 }
 
+// Helper function for EF_SLIDE_TO_END - pick the next destination word
+// and update the state of the zipper.
+bool Animation::_slidePickNextZipTarget() {
+  uint32_t signBits = _sentence.getSignBits();
+  if (signBits == 0) {
+    return false; // Impossible to find another zip target; it's an empty sentence.
+  }
+
+  bool found = false;
+
+  if (_curPhaseNum == PHASE_INTRO) {
+    // Search right-to-left for a target as we zip in the words.
+    for (int i = _slideCurTargetSignId - 1; i >= 0; i--) {
+      if (signBits & (1 << i)) {
+        _slideCurTargetSignId = i;
+        found = true;
+        break;
+      }
+    }
+
+    _slideCurZipPosition = 0; // If we're looking for next zip target, we're starting a new zip.
+
+    if (_slideCurTargetSignId != _slideCurZipPosition) {
+      // We'll need to zip through at least one sign. Set zip timer appropriately.
+      _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_ZIP;
+    } else {
+      // We're starting on the destination word. Just hold it.
+      _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_HOLD;
+    }
+  } else {
+    // We are in PHASE_OUTRO. (This method is not valid in PHASE_HOLD.)
+    // Search left-to-right for a target as we zip out the words.
+    for (int i = _slideCurTargetSignId; i < NUM_SIGNS; i++) {
+      if (signBits & (1 << i)) {
+        _slideCurTargetSignId = i;
+        found = true;
+        break;
+      }
+    }
+
+    // We start zipping @ the target sign id, and are always in 'zip' mode timing as there are
+    // no 'hold' steps in the outro phase.
+    _slideCurZipPosition = _slideCurTargetSignId;
+    _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_ZIP;
+  }
+
+  return found;
+}
+
+
 // Perform the next step of animation.
 void Animation::next() {
   if (!_isRunning || _phaseCountRemaining == 0) {
@@ -296,6 +346,7 @@ void Animation::next() {
   unsigned int i;
   unsigned int targetWordIdx;
   unsigned int numWordsInSentence;
+  bool foundZipTarget;
 
   switch(_effect) {
   case EF_APPEAR:
@@ -442,13 +493,54 @@ void Animation::next() {
   case EF_SLIDE_TO_END:
     if (_curPhaseNum == PHASE_INTRO) {
       if (_isFirstPhaseTic) {
-        // ****** todo make slide-to-end work. *****
-        DBGPRINT("Error: TODO - SLIDE_TO_END Intro first phase tic not implemented");
+        // We start by zipping from sign 0 to the last sign in the sentence.
+        // Targets are selected from right to left.
+        _slideCurTargetSignId = NUM_SIGNS;
+        foundZipTarget = _slidePickNextZipTarget(); // Find the last sign in the sentence.
+
+        if (!foundZipTarget) {
+          // Shouldn't get here; it implies we lit an empty sentence?
+          DBGPRINT("Warning: no valid slide target sign id at start of intro phase");
+          _phaseRemainingMillis = 0; // Force progression to next phase.
+          _slideCurTargetSignId = 0; // Set this to a valid value for paranoia's sake.
+          break; // short-circuit remainder of switch block.
+        } else {
+          // Ok... Get the first zip going!
+          signs[_slideCurZipPosition].enable();
+        }
       }
 
+      // Most times we have nothing to do to update the animation...
+      // Unless we've hit the next zip movement time.
       if (_phaseRemainingMillis <= _nextZipTime) {
-        // todo - zip.....
-        DBGPRINT("Error: TODO - SLIDE_TO_END Intro phase zip not implemented");
+        // Update the position of the zipping word.
+        if (_slideCurZipPosition == _slideCurTargetSignId) {
+          // We already landed on the target word. This is the end of the hold phase.
+          // Reset to begin a new zip. Or if pickNext returns false, this intro phase is over.
+          foundZipTarget = _slidePickNextZipTarget();
+          if (foundZipTarget) {
+            signs[_slideCurZipPosition].enable(); // zip pos reset to 0 by pickNext(); begin zip there.
+            // n.b. we don't disable the currently-lit sign; we leave the destination sign on.
+          } else {
+            // Forcibly end the intro phase; no zip target left.
+            _phaseRemainingMillis = 0;
+            _slideCurZipPosition = 0;
+            _slideCurTargetSignId = 0;
+          }
+        } else {
+          signs[_slideCurZipPosition].disable(); // Turn off our current position...
+          _slideCurZipPosition++; // move one to the right...
+          signs[_slideCurZipPosition].enable(); // And wink on there.
+
+          // And reset the timer.
+          if (_slideCurZipPosition == _slideCurTargetSignId) {
+            // We just arrived at the destination word. Hold here.
+            _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_HOLD;
+          } else {
+            // More zipping to do.
+            _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_ZIP;
+          }
+        }
       }
     } else if (_curPhaseNum == PHASE_HOLD) {
       if (_isFirstPhaseTic) {
@@ -459,9 +551,30 @@ void Animation::next() {
       }
     } else if (_curPhaseNum == PHASE_OUTRO) {
       if (_isFirstPhaseTic) {
+        _slideCurTargetSignId = 0; // Reset our zip target for left-to-right search.
+        foundZipTarget = _slidePickNextZipTarget();
+        if (!foundZipTarget) {
+          // Nothing to do?
+          DBGPRINT("Warning: no zip target @ beginning of EF_SLIDE outro phase; empty sentence?");
+          _phaseRemainingMillis = 0; // Instant end to phase.
+        }
+        // TODO(aaron): Does our timing assume we sit around on this word for one zip interval?
+        // Or do we instantly turn off this word and progress to the next zipPosition?
+      }
+
+      if (_phaseRemainingMillis <= _nextZipTime) {
+        // Move the zipper along.
+        signs[_slideCurZipPosition].disable();
+        if (_slideCurZipPosition != 0) {
+          _slideCurZipPosition--;
+          signs[_slideCurZipPosition].enable();
+          _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_ZIP;
+        } else {
+          // Find another word to start zipping out.
+          foundZipTarget = _slidePickNextZipTarget();
+        }
       }
     }
-    DBGPRINT("TODO: EF_SLIDE_TO_END");
     break;
 
   case EF_MELT:
