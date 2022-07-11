@@ -326,6 +326,10 @@ void Animation::next() {
         _phaseRemainingMillis = _ihoHoldDuration;
       } else if (_curPhaseNum == PHASE_OUTRO) {
         _phaseRemainingMillis = _ihoOutroDuration;
+      } else {
+        // No further phases. Ensure animation ends.
+        _phaseRemainingMillis = 0;
+        _phaseCountRemaining = 0;
       }
     } else {
       // An ordinary animation of 1+ homogenous-timing phases.
@@ -571,6 +575,7 @@ void Animation::next() {
           _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_ZIP;
         } else {
           // Find another word to start zipping out.
+          _slideCurTargetSignId++; // Advance zip target search starting point.
           foundZipTarget = _slidePickNextZipTarget();
         }
       }
