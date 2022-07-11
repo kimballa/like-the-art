@@ -263,23 +263,25 @@ void setup() {
   // Set up PWM on PORT_GROUP:PORT_PIN via TCC0.
   pwmTimer.setupTcc();
 
-  // Connects button-input I2C and configures Button dispatch handler methods.
-  setupButtons();
-
   pinMode(DARK_SENSOR_PIN, INPUT);
 
   // Define signs and map them to I/O channels.
   setupSigns(parallelBank0, parallelBank1);
   setupSentences(); // Define collections of signs for each sentence.
 
-  #ifdef REPORT_ANALOG_DARK_SENSOR
-    // For dark sensor; set up analog reference and discard a few reads to get accurate ones.
-    analogReference(AR_DEFAULT);
-    for (uint8_t i = 0; i < 10; i++) {
-      delay(5);
-      analogRead(DARK_SENSOR_ANALOG);
-    }
-  #endif // REPORT_ANALOG_DARK_SENSOR
+  // Initialize random seed for random choices of button assignment
+  // and sentence/animation combos to show. Analog read from A3 (disconnected/floating).
+  randomSeed(analogRead(3));
+
+  // Connects button-input I2C and configures Button dispatch handler methods.
+  setupButtons();
+
+  // For dark sensor; set up analog reference and discard a few reads to get accurate ones.
+  analogReference(AR_DEFAULT);
+  for (uint8_t i = 0; i < 10; i++) {
+    delay(5);
+    analogRead(DARK_SENSOR_ANALOG);
+  }
 
   // Decide whether to begin in RUNNING (i.e. "DARK") mode or WAITING (DARK==0; daylight).
   // Repeatedly call pollDarkSensor() until we get enough readings to have a valid average.
