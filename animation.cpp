@@ -181,7 +181,7 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
     // (zip-in times + per-word holds) + (2s whole-sentence hold) + (zip-out times)
     setupTime = (positionSum * SLIDE_TO_END_PER_WORD_ZIP + s.getNumWords() * SLIDE_TO_END_PER_WORD_HOLD);
     teardownTime = (positionSum * SLIDE_TO_END_PER_WORD_ZIP);
-    if (setupTime + teardownTime + SLIDE_TO_END_MINIMUM_SENTENCE_HOLD < milliseconds) {
+    if (setupTime + teardownTime + SLIDE_TO_END_MINIMUM_SENTENCE_HOLD > milliseconds) {
       // Enforce a minimum 1s hold phase.
       holdPhaseTime = SLIDE_TO_END_MINIMUM_SENTENCE_HOLD;
     } else {
