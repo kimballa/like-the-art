@@ -55,10 +55,10 @@ uint32_t Animation::getOptimalDuration(const Sentence &s, const Effect e, const 
       }
     }
 
-    // (zip-in times + per-word holds) + (2s whole-sentence hold) + (zip-out times)
+    // (zip-in times + per-word holds) + (2s whole-sentence hold) + (zip-out times + per-word holds)
     return (positionSum * SLIDE_TO_END_PER_WORD_ZIP + s.getNumWords() * SLIDE_TO_END_PER_WORD_HOLD)
         + SLIDE_TO_END_DEFAULT_SENTENCE_HOLD
-        + (positionSum * SLIDE_TO_END_PER_WORD_ZIP);
+        + (positionSum * SLIDE_TO_END_PER_WORD_ZIP + s.getNumWords() * SLIDE_TO_END_PER_WORD_HOLD);
   case EF_MELT:
     // time for all words to melt plus 3s hold time
     return MELT_ONE_WORD_MILLIS * NUM_SIGNS + 3000;
@@ -178,9 +178,9 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
       }
     }
 
-    // (zip-in times + per-word holds) + (2s whole-sentence hold) + (zip-out times)
+    // (zip-in times + per-word holds) + (2s whole-sentence hold) + (zip-out times + per-word holds)
     setupTime = (positionSum * SLIDE_TO_END_PER_WORD_ZIP + s.getNumWords() * SLIDE_TO_END_PER_WORD_HOLD);
-    teardownTime = (positionSum * SLIDE_TO_END_PER_WORD_ZIP);
+    teardownTime = setupTime;
     if (setupTime + teardownTime + SLIDE_TO_END_MINIMUM_SENTENCE_HOLD > milliseconds) {
       // Enforce a minimum 1s hold phase.
       holdPhaseTime = SLIDE_TO_END_MINIMUM_SENTENCE_HOLD;
@@ -189,7 +189,6 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
       holdPhaseTime = milliseconds - setupTime - teardownTime;
     }
     _setupIntroHoldOutro(setupTime, holdPhaseTime, teardownTime);
-
     DBGPRINTU("New animation: EF_SLIDE_TO_END", setupTime + holdPhaseTime + teardownTime);
     break;
   case EF_MELT:
@@ -224,32 +223,6 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
     DBGPRINT("Warning: animation planner set up 0 phase count.");
   }
 
-}
-
-// Start the animation sequence.
-void Animation::start() {
-  if (_phaseCountRemaining == 0) {
-    DBGPRINT("Warning: _phaseCountRemaining is 0 in start(); no animation to start.");
-    _isRunning = false;
-    _phaseRemainingMillis = 0;
-    _curPhaseNum = 0;
-    return;
-  }
-
-  _isRunning = true;
-  _curPhaseNum = 0;
-  _isFirstPhaseTic = true;
-  if (_isIntroHoldOutro) {
-    // In intro-hold-outro mode, the first phase is the intro phase, with its own timing.
-    _phaseRemainingMillis = _ihoIntroDuration;
-  } else {
-    // Homogenous phase timing.
-    _phaseRemainingMillis = _phaseDuration; // set up 1st phase duration.
-  }
-
-  allSignsOff(); // All animations start with a clean slate.
-  configMaxPwm();
-  next(); // Do first frame of first phase.
 }
 
 // Helper function for EF_SLIDE_TO_END - pick the next destination word
@@ -292,13 +265,40 @@ bool Animation::_slidePickNextZipTarget() {
       }
     }
 
-    // We start zipping @ the target sign id, and are always in 'zip' mode timing as there are
-    // no 'hold' steps in the outro phase.
+    // We start zipping @ the target sign id. We are in this method because we just turned
+    // off sign 0 at the end of zipping out a previous word in the outro phase; so we start
+    // with a 'hold' step that holds the 'blank' before zipping the next word out.
     _slideCurZipPosition = _slideCurTargetSignId;
-    _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_ZIP;
+    _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_HOLD;
   }
 
   return found;
+}
+
+// Start the animation sequence.
+void Animation::start() {
+  if (_phaseCountRemaining == 0) {
+    DBGPRINT("Warning: _phaseCountRemaining is 0 in start(); no animation to start.");
+    _isRunning = false;
+    _phaseRemainingMillis = 0;
+    _curPhaseNum = 0;
+    return;
+  }
+
+  _isRunning = true;
+  _curPhaseNum = 0;
+  _isFirstPhaseTic = true;
+  if (_isIntroHoldOutro) {
+    // In intro-hold-outro mode, the first phase is the intro phase, with its own timing.
+    _phaseRemainingMillis = _ihoIntroDuration;
+  } else {
+    // Homogenous phase timing.
+    _phaseRemainingMillis = _phaseDuration; // set up 1st phase duration.
+  }
+
+  allSignsOff(); // All animations start with a clean slate.
+  configMaxPwm();
+  next(); // Do first frame of first phase.
 }
 
 
@@ -335,6 +335,7 @@ void Animation::next() {
       // An ordinary animation of 1+ homogenous-timing phases.
       _phaseRemainingMillis = _phaseDuration;
     }
+
   }
 
   if (_phaseCountRemaining == 0) {
@@ -549,9 +550,8 @@ void Animation::next() {
     } else if (_curPhaseNum == PHASE_HOLD) {
       if (_isFirstPhaseTic) {
         // Make sure we're setup correctly in case something got missed in intro phase.
-        allSignsOff();
         configMaxPwm();
-        _sentence.enable();
+        _sentence.enableExclusively();
       }
     } else if (_curPhaseNum == PHASE_OUTRO) {
       if (_isFirstPhaseTic) {
@@ -602,9 +602,8 @@ void Animation::next() {
     } else if (_curPhaseNum == PHASE_HOLD) {
       if (_isFirstPhaseTic) {
         // Make sure we're setup correctly in case something got missed in intro phase.
-        allSignsOff();
         configMaxPwm();
-        _sentence.enable();
+        _sentence.enableExclusively();
       }
     } else if (_curPhaseNum == PHASE_OUTRO) {
       if (_isFirstPhaseTic) {
@@ -626,8 +625,7 @@ void Animation::next() {
       DBGPRINTU("Unknown effect id in next()?! _effect = ", (uint32_t)_effect);
     }
     // Just reset to EF_APPEAR state.
-    allSignsOff();
-    _sentence.enable();
+    _sentence.enableExclusively();
     configMaxPwm();
     // And kill this animation.
     _phaseRemainingMillis = 0;

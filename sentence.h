@@ -18,6 +18,9 @@ public:
   /** Light up the sentence (simple "appear" effect) */
   void enable();
 
+  /** Light up the sentence; ensure non-sentence signs are disabled. */
+  void enableExclusively();
+
   /** Turn off all words in the sentence. */
   void disable();
 

@@ -35,8 +35,17 @@ void setupSentences() {
   _sentence( S_WHY | S_DO | S_YOU | S_LOVE | S_BM | S_QUESTION );
 }
 
-/** Turn on the signs for sentence (and only those signs) */
+/** Turn on the signs for sentence */
 void Sentence::enable() {
+  for (unsigned int i = 0; i < NUM_SIGNS; i++) {
+    if (_signs & (1 << i)) {
+      signs[i].enable();
+    }
+  }
+}
+
+/** Turn on the signs for sentence (and only those signs) */
+void Sentence::enableExclusively() {
   for (unsigned int i = 0; i < NUM_SIGNS; i++) {
     if (_signs & (1 << i)) {
       signs[i].enable();

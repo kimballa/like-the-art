@@ -353,8 +353,10 @@ static void loopStateRunning() {
   // Need to choose a new animation
   Effect e = (Effect)random(5); // appear, glow, blink, fast blink, one-at-a-time.
   Sentence s(0, random(16)); // light up some combo of the 4 LEDs we have.
+//Effect e = EF_SLIDE_TO_END;
+//Sentence s(0, 0xF); // light up first 4 LEDs.
 
-  activeAnimation.setParameters(s, e, 0, 6000); // start a new animation for 6 seconds
+  activeAnimation.setParameters(s, e, 0, 0); // start a new animation for the recommended amt of time.
   activeAnimation.start();
 }
 
