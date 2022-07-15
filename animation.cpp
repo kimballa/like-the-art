@@ -2,6 +2,42 @@
 
 #include "like-the-art.h"
 
+void debugPrintEffect(const Effect e) {
+  switch (e) {
+  case EF_APPEAR:
+    DBGPRINT("EF_APPEAR");
+    break;
+  case EF_GLOW:
+    DBGPRINT("EF_GLOW");
+    break;
+  case EF_BLINK:
+    DBGPRINT("EF_BLINK");
+    break;
+  case EF_BLINK_FAST:
+    DBGPRINT("EF_BLINK_FAST");
+    break;
+  case EF_ONE_AT_A_TIME:
+    DBGPRINT("EF_ONE_AT_A_TIME");
+    break;
+  case EF_BUILD:
+    DBGPRINT("EF_BUILD");
+    break;
+  case EF_SNAKE:
+    DBGPRINT("EF_SNAKE");
+    break;
+  case EF_SLIDE_TO_END:
+    DBGPRINT("EF_SLIDE_TO_END");
+    break;
+  case EF_MELT:
+    DBGPRINT("EF_MELT");
+    break;
+  default:
+    DBGPRINTU("Unknown effect id:", (unsigned int)e);
+    break;
+  }
+}
+
+
 Animation::Animation():
     _sentence(0, 0), _effect(EF_APPEAR), _flags(0), _remainingTime(0), _isRunning(false),
     _phaseDuration(0), _phaseRemainingMillis(0), _phaseCountRemaining(0)

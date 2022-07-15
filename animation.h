@@ -27,6 +27,7 @@ enum Effect {
   EF_ALT_LOVE_HATE,  // Alternate lighting the "LOVE" and "HATE" words.
 };
 
+extern void debugPrintEffect(const Effect e);
 
 constexpr unsigned int NUM_EFFECTS = (unsigned int)(Effect::EF_ALT_LOVE_HATE) + 1;
 
