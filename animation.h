@@ -103,6 +103,26 @@ private:
   Effect _effect;
   uint32_t _flags;
 
+  void _setParamsAppear(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsGlow(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsBlink(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsBlinkFast(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsOneAtATime(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsBuild(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsSnake(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsSlide(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsMelt(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+
+  void _nextAppear();
+  void _nextGlow();
+  void _nextBlink();
+  void _nextBlinkFast();
+  void _nextOneAtATime();
+  void _nextBuild();
+  void _nextSnake();
+  void _nextSlide();
+  void _nextMelt();
+
   //// State to manage advancing frames & phases of the animation ////
   unsigned int _remainingTime; // millis.
   bool _isRunning;

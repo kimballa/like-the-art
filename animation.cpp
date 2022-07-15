@@ -69,6 +69,141 @@ uint32_t Animation::getOptimalDuration(const Sentence &s, const Effect e, const 
   }
 }
 
+void Animation::_setParamsAppear(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+  // Single phase which lasts the entire duration of the effect.
+  _phaseDuration = milliseconds;
+  _phaseCountRemaining = 1;
+  DBGPRINTU("New animation: EF_APPEAR", milliseconds);
+}
+
+void Animation::_setParamsGlow(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+
+  uint32_t framesPerPhase;
+
+  // 1/4 the time in phase 0: increasing brightness (fade in)
+  // 1/2 the time in phase 1: hold at max brightness
+  // 1/4 the time in phase 2: decreasing brightness (fade out)
+  _phaseDuration = milliseconds / 4;
+  _setupIntroHoldOutro(_phaseDuration, 2 * _phaseDuration, _phaseDuration);
+
+  framesPerPhase = _phaseDuration / LOOP_MILLIS;
+  _glowStepSize = getMaxPwmDutyCycle() / framesPerPhase;
+  _glowCurrentBrightness = 0;
+  DBGPRINTU("New animation: EF_GLOW", milliseconds);
+}
+
+void Animation::_setParamsBlink(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+  // Simple blinking effect; an even number of phases alternating on & off, of fixed duration.
+  _phaseDuration = BLINK_PHASE_MILLIS;
+  _phaseCountRemaining = (milliseconds + BLINK_PHASE_MILLIS - 1) / BLINK_PHASE_MILLIS;
+  DBGPRINTU("New animation: EF_BLINK", milliseconds);
+}
+void Animation::_setParamsBlinkFast(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+  // Like EF_BLINK but with faster phases.
+  _phaseDuration = FAST_BLINK_PHASE_MILLIS;
+  _phaseCountRemaining = (milliseconds + FAST_BLINK_PHASE_MILLIS - 1) / FAST_BLINK_PHASE_MILLIS;
+  DBGPRINTU("New animation: EF_BLINK_FAST", milliseconds);
+}
+
+void Animation::_setParamsOneAtATime(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+  // Have N phases where N = number of words in sentence. One word at a time is lit.
+  _phaseCountRemaining = s.getNumWords();
+  _phaseDuration = milliseconds / _phaseCountRemaining;
+  DBGPRINTU("New animation: EF_ONE_AT_A_TIME", milliseconds);
+}
+
+void Animation::_setParamsBuild(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+  // Have N phases where N = number of words in sentence; in phase k the first k words of the
+  // sentence are lit.
+  _phaseCountRemaining = s.getNumWords();
+  _phaseDuration = milliseconds / _phaseCountRemaining;
+  DBGPRINTU("New animation: EF_BUILD", milliseconds);
+}
+
+void Animation::_setParamsSnake(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+  // Like BUILD, but also "unbuild" by then turning off the 1st word, then the
+  // 2nd... until all is dark.
+  _phaseCountRemaining = s.getNumWords() * 2;
+  _phaseDuration = milliseconds / _phaseCountRemaining;
+  DBGPRINTU("New animation: EF_SNAKE", milliseconds);
+}
+
+void Animation::_setParamsSlide(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+
+  uint32_t holdPhaseTime;
+  uint32_t setupTime;
+  uint32_t teardownTime;
+  uint32_t positionSum, sentenceBits;
+  unsigned int i;
+
+  // Light pulse 'zips' through all words on the board to the last word in the sentence and sticks
+  // there. Then another light pulse zips through all words starting @ first to the 2nd to last
+  // word in the sentence...
+  //
+  // There is a brief hold when each zip arrives at its destination word.
+  //
+  // There is a full hold with the sentence on after they're all illuminated.
+  //
+  // Then all the word lights "zip back" to left.
+  //
+  // This effect has fixed timing for light zips and per-word holds; any additional time
+  // is used for the full-sentence hold. A full sentence hold of at least 1s is enforced.
+  // If `milliseconds` is too short for minimum timing, it will be disregarded.
+  positionSum = 0;
+  sentenceBits = s.getSignBits();
+  for (i = 0; i < NUM_SIGNS; i++) {
+    if (sentenceBits & (1 << i)) {
+      positionSum += i;
+    }
+  }
+
+  // (zip-in times + per-word holds) + (2s whole-sentence hold) + (zip-out times + per-word holds)
+  setupTime = (positionSum * SLIDE_TO_END_PER_WORD_ZIP + s.getNumWords() * SLIDE_TO_END_PER_WORD_HOLD);
+  teardownTime = setupTime;
+  if (setupTime + teardownTime + SLIDE_TO_END_MINIMUM_SENTENCE_HOLD > milliseconds) {
+    // Enforce a minimum 1s hold phase.
+    holdPhaseTime = SLIDE_TO_END_MINIMUM_SENTENCE_HOLD;
+  } else {
+    // If milliseconds is bigger than the minimum, allocate all the remaining time to hold phase.
+    holdPhaseTime = milliseconds - setupTime - teardownTime;
+  }
+  _setupIntroHoldOutro(setupTime, holdPhaseTime, teardownTime);
+  DBGPRINTU("New animation: EF_SLIDE_TO_END", setupTime + holdPhaseTime + teardownTime);
+}
+
+void Animation::_setParamsMelt(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+
+  uint32_t numWordsToMelt;
+  uint32_t holdPhaseTime;
+
+  // Start with all words on and "melt away" words one-by-one to reveal the
+  // real sentence. The sentence holds, and then individual words turn off
+  // to fade to black for outro.
+  numWordsToMelt = NUM_SIGNS - s.getNumWords();
+  if (NUM_SIGNS * MELT_ONE_WORD_MILLIS > milliseconds) {
+    // This is going to be an over-length animation. Just do a quick hold.
+    holdPhaseTime = 1000;
+  } else {
+    // All time not spent melting is just in hold.
+    holdPhaseTime = milliseconds - (NUM_SIGNS * MELT_ONE_WORD_MILLIS);
+  }
+
+  _setupIntroHoldOutro(numWordsToMelt * MELT_ONE_WORD_MILLIS,
+                       holdPhaseTime,
+                       s.getNumWords() * MELT_ONE_WORD_MILLIS);
+
+  DBGPRINTU("New animation: EF_MELT", milliseconds);
+}
+
 /**
  * Set the parameters for the next animation cycle. Based on the specified sentence, effect, and
  * duration, tees up the internal plan to execute the animation frames.
@@ -78,7 +213,6 @@ uint32_t Animation::getOptimalDuration(const Sentence &s, const Effect e, const 
  * the result of getOptimalDuration().
  */
 void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds) {
-
   if (_isRunning) {
     // We continue to do what was asked of us, but let operator know last animation was incomplete.
     DBGPRINT("Warning: Resetting animation parameters without finishing last animation");
@@ -97,132 +231,45 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
   _phaseCountRemaining = 0;
   _isIntroHoldOutro = false;
 
-  uint32_t framesPerPhase;
-  uint32_t numWordsToMelt;
-  uint32_t holdPhaseTime;
-  uint32_t setupTime;
-  uint32_t teardownTime;
-  uint32_t positionSum, sentenceBits;
-  unsigned int i;
-
   switch(_effect) {
   case EF_APPEAR:
-    // Single phase which lasts the entire duration of the effect.
-    _phaseDuration = milliseconds;
-    _phaseCountRemaining = 1;
-    DBGPRINTU("New animation: EF_APPEAR", milliseconds);
+    _setParamsAppear(s, e, flags, milliseconds);
     break;
   case EF_GLOW:
-    // 1/4 the time in phase 0: increasing brightness (fade in)
-    // 1/2 the time in phase 1: hold at max brightness
-    // 1/4 the time in phase 2: decreasing brightness (fade out)
-    _phaseDuration = milliseconds / 4;
-    _setupIntroHoldOutro(_phaseDuration, 2 * _phaseDuration, _phaseDuration);
-
-    framesPerPhase = _phaseDuration / LOOP_MILLIS;
-    _glowStepSize = getMaxPwmDutyCycle() / framesPerPhase;
-    _glowCurrentBrightness = 0;
-    DBGPRINTU("New animation: EF_GLOW", milliseconds);
+    _setParamsGlow(s, e, flags, milliseconds);
     break;
   case EF_BLINK:
-    // Simple blinking effect; an even number of phases alternating on & off, of fixed duration.
-    _phaseDuration = BLINK_PHASE_MILLIS;
-    _phaseCountRemaining = (milliseconds + BLINK_PHASE_MILLIS - 1) / BLINK_PHASE_MILLIS;
-    DBGPRINTU("New animation: EF_BLINK", milliseconds);
+    _setParamsBlink(s, e, flags, milliseconds);
     break;
   case EF_BLINK_FAST:
-    // Like EF_BLINK but with faster phases.
-    _phaseDuration = FAST_BLINK_PHASE_MILLIS;
-    _phaseCountRemaining = (milliseconds + FAST_BLINK_PHASE_MILLIS - 1) / FAST_BLINK_PHASE_MILLIS;
-    DBGPRINTU("New animation: EF_BLINK_FAST", milliseconds);
+    _setParamsBlinkFast(s, e, flags, milliseconds);
     break;
   case EF_ONE_AT_A_TIME:
-    // Have N phases where N = number of words in sentence. One word at a time is lit.
-    _phaseCountRemaining = s.getNumWords();
-    _phaseDuration = milliseconds / _phaseCountRemaining;
-    DBGPRINTU("New animation: EF_ONE_AT_A_TIME", milliseconds);
+    _setParamsOneAtATime(s, e, flags, milliseconds);
     break;
   case EF_BUILD:
-    // Have N phases where N = number of words in sentence; in phase k the first k words of the
-    // sentence are lit.
-    _phaseCountRemaining = s.getNumWords();
-    _phaseDuration = milliseconds / _phaseCountRemaining;
-    DBGPRINTU("New animation: EF_BUILD", milliseconds);
+    _setParamsBuild(s, e, flags, milliseconds);
     break;
   case EF_SNAKE:
-    // Like BUILD, but also "unbuild" by then turning off the 1st word, then the
-    // 2nd... until all is dark.
-    _phaseCountRemaining = s.getNumWords() * 2;
-    _phaseDuration = milliseconds / _phaseCountRemaining;
-    DBGPRINTU("New animation: EF_SNAKE", milliseconds);
+    _setParamsSnake(s, e, flags, milliseconds);
     break;
   case EF_SLIDE_TO_END:
-    // Light pulse 'zips' through all words on the board to the last word in the sentence and sticks
-    // there. Then another light pulse zips through all words starting @ first to the 2nd to last
-    // word in the sentence...
-    //
-    // There is a brief hold when each zip arrives at its destination word.
-    //
-    // There is a full hold with the sentence on after they're all illuminated.
-    //
-    // Then all the word lights "zip back" to left.
-    //
-    // This effect has fixed timing for light zips and per-word holds; any additional time
-    // is used for the full-sentence hold. A full sentence hold of at least 1s is enforced.
-    // If `milliseconds` is too short for minimum timing, it will be disregarded.
-    positionSum = 0;
-    sentenceBits = s.getSignBits();
-    for (i = 0; i < NUM_SIGNS; i++) {
-      if (sentenceBits & (1 << i)) {
-        positionSum += i;
-      }
-    }
-
-    // (zip-in times + per-word holds) + (2s whole-sentence hold) + (zip-out times + per-word holds)
-    setupTime = (positionSum * SLIDE_TO_END_PER_WORD_ZIP + s.getNumWords() * SLIDE_TO_END_PER_WORD_HOLD);
-    teardownTime = setupTime;
-    if (setupTime + teardownTime + SLIDE_TO_END_MINIMUM_SENTENCE_HOLD > milliseconds) {
-      // Enforce a minimum 1s hold phase.
-      holdPhaseTime = SLIDE_TO_END_MINIMUM_SENTENCE_HOLD;
-    } else {
-      // If milliseconds is bigger than the minimum, allocate all the remaining time to hold phase.
-      holdPhaseTime = milliseconds - setupTime - teardownTime;
-    }
-    _setupIntroHoldOutro(setupTime, holdPhaseTime, teardownTime);
-    DBGPRINTU("New animation: EF_SLIDE_TO_END", setupTime + holdPhaseTime + teardownTime);
+    _setParamsSlide(s, e, flags, milliseconds);
     break;
   case EF_MELT:
-    // Start with all words on and "melt away" words one-by-one to reveal the
-    // real sentence. The sentence holds, and then individual words turn off
-    // to fade to black for outro.
-    numWordsToMelt = NUM_SIGNS - s.getNumWords();
-    if (NUM_SIGNS * MELT_ONE_WORD_MILLIS > milliseconds) {
-      // This is going to be an over-length animation. Just do a quick hold.
-      holdPhaseTime = 1000;
-    } else {
-      // All time not spent melting is just in hold.
-      holdPhaseTime = milliseconds - (NUM_SIGNS * MELT_ONE_WORD_MILLIS);
-    }
-
-    _setupIntroHoldOutro(numWordsToMelt * MELT_ONE_WORD_MILLIS,
-                         holdPhaseTime,
-                         s.getNumWords() * MELT_ONE_WORD_MILLIS);
-
-    DBGPRINTU("New animation: EF_MELT", milliseconds);
+    _setParamsMelt(s, e, flags, milliseconds);
     break;
   default:
     DBGPRINTU("Unknown effect id", (uint32_t)_effect);
     // Act like this was EF_APPEAR
-    _phaseDuration = milliseconds;
-    _phaseCountRemaining = 1;
     _effect = EF_APPEAR;
+    _setParamsAppear(s, _effect, flags, milliseconds);
     break;
   }
 
   if (_phaseCountRemaining == 0) {
     DBGPRINT("Warning: animation planner set up 0 phase count.");
   }
-
 }
 
 // Helper function for EF_SLIDE_TO_END - pick the next destination word
@@ -301,6 +348,292 @@ void Animation::start() {
   next(); // Do first frame of first phase.
 }
 
+void Animation::_nextAppear() {
+  // Single phase which lasts the entire duration of the effect.
+  // On first frame, turn on the signs; and we're done.
+  if (_isFirstPhaseTic) {
+    _sentence.enable();
+  }
+}
+
+void Animation::_nextGlow() {
+  // 1/3 the time in phase 0: increasing brightness (fade in)
+  // 1/3 the time in phase 1: hold at max brightness
+  // 1/3 the time in phase 3: decreasing brightness (fade out)
+  if (_isFirstPhaseTic) {
+    _sentence.enable();
+
+    if (_curPhaseNum == PHASE_INTRO) {
+      pwmTimer.setDutyCycle(0); // Start fully off.
+    } else if (_curPhaseNum == PHASE_HOLD) {
+      // Second phase is fully glow'd up and holding steady here.
+      configMaxPwm();
+    } else if (_curPhaseNum == PHASE_OUTRO) {
+      // Third phase starts at fully glowing and fade out.
+      configMaxPwm();
+      _glowCurrentBrightness = getMaxPwmDutyCycle();
+    }
+  } else if (_curPhaseNum == PHASE_INTRO) {
+    // Not first frame of phase, and we are in the 1st phase (increasing glow)
+    _glowCurrentBrightness += _glowStepSize;
+    pwmTimer.setDutyCycle(_glowCurrentBrightness);
+  } else if (_curPhaseNum == PHASE_OUTRO) {
+    // Not first frame of phase and we are in last phase (fade out)
+    _glowCurrentBrightness -= _glowStepSize;
+    pwmTimer.setDutyCycle(_glowCurrentBrightness);
+  }
+}
+
+void Animation::_nextBlink() {
+  if (_isFirstPhaseTic) {
+    if (_curPhaseNum % 2 == 0) {
+      // Even phase: show
+      _sentence.enable();
+    } else {
+      // Odd phase: hide
+      _sentence.disable();
+    }
+  }
+}
+
+void Animation::_nextBlinkFast() {
+  // Both blink and fast blink have same logic; difference is all
+  // in the timing setup during setParameters().
+  _nextBlink();
+}
+
+void Animation::_nextOneAtATime() {
+  unsigned int signBits;
+  unsigned int numWordsSeen;
+  unsigned int highlightWord;
+  unsigned int targetWordIdx;
+  // In phase 'N', light up only the N+1'th word in the sentence.
+  if (_isFirstPhaseTic) {
+    allSignsOff();
+
+    // Show the N'th word in the sentence.
+    signBits = _sentence.getSignBits();
+    // Find the n'th word.
+    numWordsSeen = 0;
+    highlightWord = 0;
+    // In phase 0 we want to choose the 1st word, and so on...
+    targetWordIdx = _curPhaseNum + 1;
+    for (unsigned int i = 0; i < NUM_SIGNS; i++) {
+      if (signBits & (1 << i)) {
+        numWordsSeen++;
+      }
+
+      if (numWordsSeen == targetWordIdx) {
+        // This sign bit is the word to highlight.
+        highlightWord = i;
+      }
+    }
+
+    signs[highlightWord].enable();
+  }
+}
+
+void Animation::_nextBuild() {
+  unsigned int signBits;
+  unsigned int numWordsSeen;
+  unsigned int highlightWord;
+  unsigned int targetWordIdx;
+
+  // Logic very similar to ONE_AT_A_TIME but previously-shown words remain lit.
+  if (_isFirstPhaseTic) {
+    // Turn on the N'th word in the sentence.
+    signBits = _sentence.getSignBits();
+    // Find the n'th word.
+    numWordsSeen = 0;
+    highlightWord = 0;
+    // In phase 0 we want to choose the 1st word, and so on...
+    targetWordIdx = _curPhaseNum + 1;
+    for (unsigned int i = 0; i < NUM_SIGNS; i++) {
+      if (signBits & (1 << i)) {
+        numWordsSeen++;
+      }
+
+      if (numWordsSeen == targetWordIdx) {
+        // This sign bit is the word to highlight.
+        highlightWord = i;
+      }
+    }
+
+    signs[highlightWord].enable();
+  }
+}
+
+void Animation::_nextSnake() {
+  unsigned int signBits;
+  unsigned int numWordsSeen;
+  unsigned int highlightWord;
+  unsigned int targetWordIdx;
+  unsigned int numWordsInSentence;
+
+  // Logic for the first half of the phases is identical to EF_BUILD; we then repeat
+  // the loop, turning words off one at a time.
+  if (_isFirstPhaseTic) {
+    // Turn on [or off] the N'th word in the sentence.
+    signBits = _sentence.getSignBits();
+    // Find the n'th word.
+    numWordsSeen = 0;
+    highlightWord = 0;
+    numWordsInSentence = _sentence.getNumWords();
+    // In phase 0 we want to choose the 1st word, and so on...
+    if (_curPhaseNum < numWordsInSentence) {
+      // We are turning words on.
+      targetWordIdx = _curPhaseNum + 1;
+    } else {
+      // We are in the second meta-phase, turning words off, starting at the beginning
+      // of the sign and working our way to the end of the sentence.
+      targetWordIdx = _curPhaseNum + 1 - numWordsInSentence;
+    }
+
+    for (unsigned int i = 0; i < NUM_SIGNS; i++) {
+      if (signBits & (1 << i)) {
+        numWordsSeen++;
+      }
+
+      if (numWordsSeen == targetWordIdx) {
+        // This sign bit is the word to highlight or turn off.
+        highlightWord = i;
+      }
+    }
+
+    if (_curPhaseNum < numWordsInSentence) {
+      signs[highlightWord].enable();
+    } else {
+      signs[highlightWord].disable();
+    }
+  }
+}
+
+void Animation::_nextSlide() {
+  bool foundZipTarget;
+
+  if (_curPhaseNum == PHASE_INTRO) {
+    if (_isFirstPhaseTic) {
+      // We start by zipping from sign 0 to the last sign in the sentence.
+      // Targets are selected from right to left.
+      _slideCurTargetSignId = NUM_SIGNS;
+      foundZipTarget = _slidePickNextZipTarget(); // Find the last sign in the sentence.
+
+      if (!foundZipTarget) {
+        // Shouldn't get here; it implies we lit an empty sentence?
+        DBGPRINT("Warning: no valid slide target sign id at start of intro phase");
+        _phaseRemainingMillis = 0; // Force progression to next phase.
+        _slideCurTargetSignId = 0; // Set this to a valid value for paranoia's sake.
+        return; // short-circuit and don't handle zip movement.
+      } else {
+        // Ok... Get the first zip going!
+        signs[_slideCurZipPosition].enable();
+      }
+    }
+
+    // Most times we have nothing to do to update the animation...
+    // Unless we've hit the next zip movement time.
+    if (_phaseRemainingMillis <= _nextZipTime) {
+      // Update the position of the zipping word.
+      if (_slideCurZipPosition == _slideCurTargetSignId) {
+        // We already landed on the target word. This is the end of the hold phase.
+        // Reset to begin a new zip. Or if pickNext returns false, this intro phase is over.
+        foundZipTarget = _slidePickNextZipTarget();
+        if (foundZipTarget) {
+          signs[_slideCurZipPosition].enable(); // zip pos reset to 0 by pickNext(); begin zip there.
+          // n.b. we don't disable the currently-lit sign; we leave the destination sign on.
+        } else {
+          // Forcibly end the intro phase; no zip target left.
+          _phaseRemainingMillis = 0;
+          _slideCurZipPosition = 0;
+          _slideCurTargetSignId = 0;
+        }
+      } else {
+        signs[_slideCurZipPosition].disable(); // Turn off our current position...
+        _slideCurZipPosition++; // move one to the right...
+        signs[_slideCurZipPosition].enable(); // And wink on there.
+
+        // And reset the timer.
+        if (_slideCurZipPosition == _slideCurTargetSignId) {
+          // We just arrived at the destination word. Hold here.
+          _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_HOLD;
+        } else {
+          // More zipping to do.
+          _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_ZIP;
+        }
+      }
+    }
+  } else if (_curPhaseNum == PHASE_HOLD) {
+    if (_isFirstPhaseTic) {
+      // Make sure we're setup correctly in case something got missed in intro phase.
+      configMaxPwm();
+      _sentence.enableExclusively();
+    }
+  } else if (_curPhaseNum == PHASE_OUTRO) {
+    if (_isFirstPhaseTic) {
+      _slideCurTargetSignId = 0; // Reset our zip target for left-to-right search.
+      foundZipTarget = _slidePickNextZipTarget();
+      if (!foundZipTarget) {
+        // Nothing to do?
+        DBGPRINT("Warning: no zip target @ beginning of EF_SLIDE outro phase; empty sentence?");
+        _phaseRemainingMillis = 0; // Instant end to phase.
+      }
+      // TODO(aaron): Does our timing assume we sit around on this word for one zip interval?
+      // Or do we instantly turn off this word and progress to the next zipPosition?
+    }
+
+    if (_phaseRemainingMillis <= _nextZipTime) {
+      // Move the zipper along.
+      signs[_slideCurZipPosition].disable();
+      if (_slideCurZipPosition != 0) {
+        _slideCurZipPosition--;
+        signs[_slideCurZipPosition].enable();
+        _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_ZIP;
+      } else {
+        // Find another word to start zipping out.
+        _slideCurTargetSignId++; // Advance zip target search starting point.
+        foundZipTarget = _slidePickNextZipTarget();
+      }
+    }
+  }
+}
+
+void Animation::_nextMelt() {
+  if (_curPhaseNum == PHASE_INTRO) {
+    if (_isFirstPhaseTic) {
+      // When the intro phase starts, the entire board will be lit.
+      allSignsOn();
+      // Queue up the first melt sub-phase to start one melt interval after that.
+      _nextMeltTime = _ihoIntroDuration - MELT_ONE_WORD_MILLIS;
+      _numWordsLeftToMelt = NUM_SIGNS - _sentence.getNumWords();
+      // We need to melt away all the signs...
+      _availableMeltSet = (1 << NUM_SIGNS) - 1;
+      // ... except those in the current sentence.
+      _availableMeltSet &= ~(_sentence.getSignBits());
+    }
+
+    if (_phaseRemainingMillis <= _nextMeltTime) {
+      _meltWord();
+    }
+  } else if (_curPhaseNum == PHASE_HOLD) {
+    if (_isFirstPhaseTic) {
+      // Make sure we're setup correctly in case something got missed in intro phase.
+      configMaxPwm();
+      _sentence.enableExclusively();
+    }
+  } else if (_curPhaseNum == PHASE_OUTRO) {
+    if (_isFirstPhaseTic) {
+      // Queue up a melt to begin immediately; we now start removing words from the real sentence.
+      _nextMeltTime = _phaseRemainingMillis;
+      _availableMeltSet = _sentence.getSignBits(); // We want to melt the sentence itself.
+      _numWordsLeftToMelt = _sentence.getNumWords();
+    }
+
+    if (_phaseRemainingMillis <= _nextMeltTime) {
+      _meltWord();
+    }
+  }
+}
+
 
 // Perform the next step of animation.
 void Animation::next() {
@@ -335,7 +668,6 @@ void Animation::next() {
       // An ordinary animation of 1+ homogenous-timing phases.
       _phaseRemainingMillis = _phaseDuration;
     }
-
   }
 
   if (_phaseCountRemaining == 0) {
@@ -345,280 +677,34 @@ void Animation::next() {
   }
 
   // Actually perform the appropriate frame advance action for the specified effect.
-  unsigned int signBits;
-  unsigned int numWordsSeen;
-  unsigned int highlightWord;
-  unsigned int i;
-  unsigned int targetWordIdx;
-  unsigned int numWordsInSentence;
-  bool foundZipTarget;
-
   switch(_effect) {
   case EF_APPEAR:
-    // Single phase which lasts the entire duration of the effect.
-    // On first frame, turn on the signs; and we're done.
-    if (_isFirstPhaseTic) {
-      _sentence.enable();
-    }
+    _nextAppear();
     break;
-
   case EF_GLOW:
-    // 1/3 the time in phase 0: increasing brightness (fade in)
-    // 1/3 the time in phase 1: hold at max brightness
-    // 1/3 the time in phase 3: decreasing brightness (fade out)
-    if (_isFirstPhaseTic) {
-      _sentence.enable();
-
-      if (_curPhaseNum == PHASE_INTRO) {
-        pwmTimer.setDutyCycle(0); // Start fully off.
-      } else if (_curPhaseNum == PHASE_HOLD) {
-        // Second phase is fully glow'd up and holding steady here.
-        configMaxPwm();
-      } else if (_curPhaseNum == PHASE_OUTRO) {
-        // Third phase starts at fully glowing and fade out.
-        configMaxPwm();
-        _glowCurrentBrightness = getMaxPwmDutyCycle();
-      }
-    } else if (_curPhaseNum == PHASE_INTRO) {
-      // Not first frame of phase, and we are in the 1st phase (increasing glow)
-      _glowCurrentBrightness += _glowStepSize;
-      pwmTimer.setDutyCycle(_glowCurrentBrightness);
-    } else if (_curPhaseNum == PHASE_OUTRO) {
-      // Not first frame of phase and we are in last phase (fade out)
-      _glowCurrentBrightness -= _glowStepSize;
-      pwmTimer.setDutyCycle(_glowCurrentBrightness);
-    }
+    _nextGlow();
     break;
-
-  case EF_BLINK:      // Both blink and fast blink have same logic; difference is all
-  case EF_BLINK_FAST: // in the timing setup during setParameters().
-    if (_isFirstPhaseTic) {
-      if (_curPhaseNum % 2 == 0) {
-        // Even phase: show
-        _sentence.enable();
-      } else {
-        // Odd phase: hide
-        _sentence.disable();
-      }
-    }
+  case EF_BLINK:
+    _nextBlink();
     break;
-
+  case EF_BLINK_FAST:
+    _nextBlinkFast();
+    break;
   case EF_ONE_AT_A_TIME:
-    // In phase 'N', light up only the N+1'th word in the sentence.
-    if (_isFirstPhaseTic) {
-      allSignsOff();
-
-      // Show the N'th word in the sentence.
-      signBits = _sentence.getSignBits();
-      // Find the n'th word.
-      numWordsSeen = 0;
-      highlightWord = 0;
-      // In phase 0 we want to choose the 1st word, and so on...
-      targetWordIdx = _curPhaseNum + 1;
-      for (i = 0; i < NUM_SIGNS; i++) {
-        if (signBits & (1 << i)) {
-          numWordsSeen++;
-        }
-
-        if (numWordsSeen == targetWordIdx) {
-          // This sign bit is the word to highlight.
-          highlightWord = i;
-        }
-      }
-
-      signs[highlightWord].enable();
-    }
+    _nextOneAtATime();
     break;
-
   case EF_BUILD:
-    // Logic very similar to ONE_AT_A_TIME but previously-shown words remain lit.
-    if (_isFirstPhaseTic) {
-      // Turn on the N'th word in the sentence.
-      signBits = _sentence.getSignBits();
-      // Find the n'th word.
-      numWordsSeen = 0;
-      highlightWord = 0;
-      // In phase 0 we want to choose the 1st word, and so on...
-      targetWordIdx = _curPhaseNum + 1;
-      for (i = 0; i < NUM_SIGNS; i++) {
-        if (signBits & (1 << i)) {
-          numWordsSeen++;
-        }
-
-        if (numWordsSeen == targetWordIdx) {
-          // This sign bit is the word to highlight.
-          highlightWord = i;
-        }
-      }
-
-      signs[highlightWord].enable();
-    }
+    _nextBuild();
     break;
-
   case EF_SNAKE:
-    // Logic for the first half of the phases is identical to EF_BUILD; we then repeat
-    // the loop, turning words off one at a time.
-    if (_isFirstPhaseTic) {
-      // Turn on [or off] the N'th word in the sentence.
-      signBits = _sentence.getSignBits();
-      // Find the n'th word.
-      numWordsSeen = 0;
-      highlightWord = 0;
-      numWordsInSentence = _sentence.getNumWords();
-      // In phase 0 we want to choose the 1st word, and so on...
-      if (_curPhaseNum < numWordsInSentence) {
-        // We are turning words on.
-        targetWordIdx = _curPhaseNum + 1;
-      } else {
-        // We are in the second meta-phase, turning words off, starting at the beginning
-        // of the sign and working our way to the end of the sentence.
-        targetWordIdx = _curPhaseNum + 1 - numWordsInSentence;
-      }
-
-      for (i = 0; i < NUM_SIGNS; i++) {
-        if (signBits & (1 << i)) {
-          numWordsSeen++;
-        }
-
-        if (numWordsSeen == targetWordIdx) {
-          // This sign bit is the word to highlight or turn off.
-          highlightWord = i;
-        }
-      }
-
-      if (_curPhaseNum < numWordsInSentence) {
-        signs[highlightWord].enable();
-      } else {
-        signs[highlightWord].disable();
-      }
-    }
-
+    _nextSnake();
     break;
-
   case EF_SLIDE_TO_END:
-    if (_curPhaseNum == PHASE_INTRO) {
-      if (_isFirstPhaseTic) {
-        // We start by zipping from sign 0 to the last sign in the sentence.
-        // Targets are selected from right to left.
-        _slideCurTargetSignId = NUM_SIGNS;
-        foundZipTarget = _slidePickNextZipTarget(); // Find the last sign in the sentence.
-
-        if (!foundZipTarget) {
-          // Shouldn't get here; it implies we lit an empty sentence?
-          DBGPRINT("Warning: no valid slide target sign id at start of intro phase");
-          _phaseRemainingMillis = 0; // Force progression to next phase.
-          _slideCurTargetSignId = 0; // Set this to a valid value for paranoia's sake.
-          break; // short-circuit remainder of switch block.
-        } else {
-          // Ok... Get the first zip going!
-          signs[_slideCurZipPosition].enable();
-        }
-      }
-
-      // Most times we have nothing to do to update the animation...
-      // Unless we've hit the next zip movement time.
-      if (_phaseRemainingMillis <= _nextZipTime) {
-        // Update the position of the zipping word.
-        if (_slideCurZipPosition == _slideCurTargetSignId) {
-          // We already landed on the target word. This is the end of the hold phase.
-          // Reset to begin a new zip. Or if pickNext returns false, this intro phase is over.
-          foundZipTarget = _slidePickNextZipTarget();
-          if (foundZipTarget) {
-            signs[_slideCurZipPosition].enable(); // zip pos reset to 0 by pickNext(); begin zip there.
-            // n.b. we don't disable the currently-lit sign; we leave the destination sign on.
-          } else {
-            // Forcibly end the intro phase; no zip target left.
-            _phaseRemainingMillis = 0;
-            _slideCurZipPosition = 0;
-            _slideCurTargetSignId = 0;
-          }
-        } else {
-          signs[_slideCurZipPosition].disable(); // Turn off our current position...
-          _slideCurZipPosition++; // move one to the right...
-          signs[_slideCurZipPosition].enable(); // And wink on there.
-
-          // And reset the timer.
-          if (_slideCurZipPosition == _slideCurTargetSignId) {
-            // We just arrived at the destination word. Hold here.
-            _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_HOLD;
-          } else {
-            // More zipping to do.
-            _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_ZIP;
-          }
-        }
-      }
-    } else if (_curPhaseNum == PHASE_HOLD) {
-      if (_isFirstPhaseTic) {
-        // Make sure we're setup correctly in case something got missed in intro phase.
-        configMaxPwm();
-        _sentence.enableExclusively();
-      }
-    } else if (_curPhaseNum == PHASE_OUTRO) {
-      if (_isFirstPhaseTic) {
-        _slideCurTargetSignId = 0; // Reset our zip target for left-to-right search.
-        foundZipTarget = _slidePickNextZipTarget();
-        if (!foundZipTarget) {
-          // Nothing to do?
-          DBGPRINT("Warning: no zip target @ beginning of EF_SLIDE outro phase; empty sentence?");
-          _phaseRemainingMillis = 0; // Instant end to phase.
-        }
-        // TODO(aaron): Does our timing assume we sit around on this word for one zip interval?
-        // Or do we instantly turn off this word and progress to the next zipPosition?
-      }
-
-      if (_phaseRemainingMillis <= _nextZipTime) {
-        // Move the zipper along.
-        signs[_slideCurZipPosition].disable();
-        if (_slideCurZipPosition != 0) {
-          _slideCurZipPosition--;
-          signs[_slideCurZipPosition].enable();
-          _nextZipTime = _phaseRemainingMillis - SLIDE_TO_END_PER_WORD_ZIP;
-        } else {
-          // Find another word to start zipping out.
-          _slideCurTargetSignId++; // Advance zip target search starting point.
-          foundZipTarget = _slidePickNextZipTarget();
-        }
-      }
-    }
+    _nextSlide();
     break;
-
   case EF_MELT:
-    if (_curPhaseNum == PHASE_INTRO) {
-      if (_isFirstPhaseTic) {
-        // When the intro phase starts, the entire board will be lit.
-        allSignsOn();
-        // Queue up the first melt sub-phase to start one melt interval after that.
-        _nextMeltTime = _ihoIntroDuration - MELT_ONE_WORD_MILLIS;
-        _numWordsLeftToMelt = NUM_SIGNS - _sentence.getNumWords();
-        // We need to melt away all the signs...
-        _availableMeltSet = (1 << NUM_SIGNS) - 1;
-        // ... except those in the current sentence.
-        _availableMeltSet &= ~(_sentence.getSignBits());
-      }
-
-      if (_phaseRemainingMillis <= _nextMeltTime) {
-        _meltWord();
-      }
-    } else if (_curPhaseNum == PHASE_HOLD) {
-      if (_isFirstPhaseTic) {
-        // Make sure we're setup correctly in case something got missed in intro phase.
-        configMaxPwm();
-        _sentence.enableExclusively();
-      }
-    } else if (_curPhaseNum == PHASE_OUTRO) {
-      if (_isFirstPhaseTic) {
-        // Queue up a melt to begin immediately; we now start removing words from the real sentence.
-        _nextMeltTime = _phaseRemainingMillis;
-        _availableMeltSet = _sentence.getSignBits(); // We want to melt the sentence itself.
-        _numWordsLeftToMelt = _sentence.getNumWords();
-      }
-
-      if (_phaseRemainingMillis <= _nextMeltTime) {
-        _meltWord();
-      }
-    }
+    _nextMelt();
     break;
-
   default:
     // Shouldn't get here; setParameters() should have validated _effect.
     if (_isFirstPhaseTic) {
@@ -628,12 +714,9 @@ void Animation::next() {
     _sentence.enableExclusively();
     configMaxPwm();
     // And kill this animation.
-    _phaseRemainingMillis = 0;
-    _phaseCountRemaining = 0;
-    _isRunning = false;
+    stop();
     break;
   }
-
 
   if (LOOP_MILLIS > _phaseRemainingMillis) {
     _phaseRemainingMillis = 0;
