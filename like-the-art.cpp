@@ -353,7 +353,15 @@ static void loopStateRunning() {
   // Need to choose a new animation
   Effect newEffect = (Effect)random((uint32_t)EF_MAX_ENUM);
 
-  unsigned int sentenceId = random(sentences.size());
+  unsigned int sentenceId;
+  if (random(2)) {
+    // 50% of the time choose a random sentence from the mix.
+    sentenceId = random(sentences.size());
+  } else {
+    // Other times just display the main message
+    sentenceId = mainMsgId();
+  }
+
   const Sentence &newSentence = sentences[sentenceId];
 
   DBGPRINT("Setting up new animation for sentence:");

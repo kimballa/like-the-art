@@ -34,5 +34,6 @@ private:
 
 extern vector<Sentence> sentences;
 extern "C" void setupSentences();
+extern "C" unsigned int mainMsgId();
 
 #endif /* _SENTENCE_H */

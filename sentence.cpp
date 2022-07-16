@@ -7,15 +7,23 @@
 vector<Sentence> sentences;
 
 // Helper function for setupSentences()
-static void _sentence(const unsigned int signVector) {
+static unsigned int _sentence(const unsigned int signVector) {
   static unsigned int nextSentenceId = 0;
 
   sentences.emplace_back(nextSentenceId, signVector);
   nextSentenceId++;
 }
 
+// sentence id for "You don't have to like all the art!"
+static unsigned int MAIN_MSG_SENTENCE_ID = 0;
+unsigned int mainMsgId() {
+  return MAIN_MSG_SENTENCE_ID;
+}
+
 void setupSentences() {
-  _sentence( S_YOU | S_DONT | S_HAVE | S_TO | S_LIKE | S_ALL | S_THE | S_ART | S_BANG );
+  MAIN_MSG_SENTENCE_ID =
+      _sentence( S_YOU | S_DONT | S_HAVE | S_TO | S_LIKE | S_ALL | S_THE | S_ART | S_BANG );
+
   _sentence( S_DO | S_YOU | S_LIKE | S_THE | S_ART | S_QUESTION );
   _sentence( S_DO | S_YOU | S_LIKE | S_ART | S_QUESTION );
   _sentence( S_LIKE | S_THE | S_ART | S_BANG );
