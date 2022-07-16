@@ -39,7 +39,21 @@ Adafruit_NeoPixel neoPixel(1, 8, NEO_GRB | NEO_KHZ800);
 I2CParallel parallelBank0;
 I2CParallel parallelBank1;
 
+// Which top-level state machine to run in the main loop().
 MacroState macroState = MS_RUNNING;
+
+// State variables for an effect or sentence to lock in place during the main
+// MacroState, when commanded by a user button press.
+static Effect lockedEffect;
+static unsigned int lockedSentenceId;
+
+// How much longer are the current choices locked choices valid for?
+static unsigned int remainingLockedEffectMillis;
+static unsigned int remainingLockedSentenceMillis;
+
+// When a button press "locks" an effect or sentence, how long is it initially locked for?
+static constexpr unsigned int EFFECT_LOCK_MILLIS = 10000;
+static constexpr unsigned int SENTENCE_LOCK_MILLIS = 10000;
 
 // Neopixel intensity is increasing each tick if true.
 static bool isNeoPixelIncreasing = true;
@@ -302,7 +316,13 @@ void setup() {
 
 void setMacroStateRunning() {
   DBGPRINT(">>>> Entering RUNNING MacroState <<<<");
+
   macroState = MS_RUNNING;
+
+  // reset effect locks
+  remainingLockedSentenceMillis = 0;
+  remainingLockedEffectMillis = 0;
+
   attachStandardButtonHandlers();
 }
 
@@ -322,27 +342,35 @@ void setMacroStateWaiting() {
  * Sleep for the appropriate amount of time to make each loop iteration
  * take an equal LOOP_MICROS microseconds of time.
  */
-static inline void sleep_loop_increment(unsigned long loop_start_micros) {
-  unsigned long cur_micros = micros();
-  unsigned long delay_time = LOOP_MICROS;
-  if (cur_micros < loop_start_micros) {
+static inline void sleepLoopIncrement(unsigned long loopStartMicros) {
+  unsigned long curMicros = micros();
+  unsigned long delayTime = LOOP_MICROS;
+  if (curMicros < loopStartMicros) {
     // Clock wraparound happened mid-loop. Pretend the loop was zero-duration.
-    cur_micros = loop_start_micros;
+    curMicros = loopStartMicros;
   }
-  unsigned long loop_exec_duration = cur_micros - loop_start_micros;
-  if (loop_exec_duration > LOOP_MICROS) {
-    delay_time = 0; // The loop actually exceeded the target interval. No need to sleep.
+  unsigned long loopExecDuration = curMicros - loopStartMicros;
+  if (loopExecDuration > LOOP_MICROS) {
+    delayTime = 0; // The loop actually exceeded the target interval. No need to sleep.
   } else {
-    delay_time -= loop_exec_duration; // Subtract loop runtime from total sleep.
+    delayTime -= loopExecDuration; // Subtract loop runtime from total sleep.
   }
 
-  if (delay_time > 0) {
-    delayMicroseconds(delay_time);
+  if (delayTime > 0) {
+    delayMicroseconds(delayTime);
   }
 }
 
 /** Main loop body when we're in the MS_RUNNING macro state. */
 static void loopStateRunning() {
+
+  // Update cool-down on user choice locks.
+  remainingLockedEffectMillis = (remainingLockedEffectMillis > LOOP_MILLIS) ?
+      remainingLockedEffectMillis - LOOP_MILLIS : 0;
+
+  remainingLockedSentenceMillis = (remainingLockedSentenceMillis > LOOP_MILLIS) ?
+      remainingLockedSentenceMillis - LOOP_MILLIS : 0;
+
 
   if (activeAnimation.isRunning()) {
     // We're currently in an animation; just advance the next frame.
@@ -350,15 +378,26 @@ static void loopStateRunning() {
     return;
   }
 
-  // Need to choose a new animation
-  Effect newEffect = (Effect)random((uint32_t)EF_MAX_ENUM);
-
+  // Current animation is done. Need to choose a new one.
+  Effect newEffect;
   unsigned int sentenceId;
-  if (random(2)) {
-    // 50% of the time choose a random sentence from the mix.
+
+  if (remainingLockedEffectMillis > 0) {
+    // Use the effect locked in by user.
+    newEffect = lockedEffect;
+  } else {
+    // Choose one at random.
+    newEffect = randomEffect();
+  }
+
+  if (remainingLockedSentenceMillis > 0) {
+    // Use the sentence locked in by user.
+    sentenceId = lockedSentenceId;
+  } else if (random(2)) {
+    // 50% of the (unlocked) time choose a random sentence from the mix.
     sentenceId = random(sentences.size());
   } else {
-    // Other times just display the main message
+    // All other times just display the main message.
     sentenceId = mainMsgId();
   }
 
@@ -379,7 +418,7 @@ static void loopStateRunning() {
 }
 
 void loop() {
-  unsigned int loop_start_micros = micros();
+  unsigned int loopStartMicros = micros();
 
   // Poll buttons and dark sensor every loop.
   pollButtons();
@@ -409,5 +448,28 @@ void loop() {
   }
 
   // At the end of each loop iteration, sleep until this iteration is LOOP_MICROS long.
-  sleep_loop_increment(loop_start_micros);
+  sleepLoopIncrement(loopStartMicros);
 }
+
+/** "Lock in" the specified effect for the next few seconds. */
+void lockEffect(const Effect e) {
+  lockedEffect = e;
+  remainingLockedEffectMillis = EFFECT_LOCK_MILLIS;
+
+  // Start a new animation with the chosen effect and current sentence.
+  activeAnimation.stop();
+  activeAnimation.setParameters(activeAnimation.getSentence(), lockedEffect, 0, 0);
+  activeAnimation.start();
+}
+
+/** "Lock in" the specified sentence for the next few seconds. */
+void lockSentence(const unsigned int sentenceId) {
+  lockedSentenceId = sentenceId;
+  remainingLockedSentenceMillis = SENTENCE_LOCK_MILLIS;
+
+  // Start a new animation with the chosen sentence and current effect.
+  activeAnimation.stop();
+  activeAnimation.setParameters(sentences[lockedSentenceId], activeAnimation.getEffect(), 0, 0);
+  activeAnimation.start();
+}
+

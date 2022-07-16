@@ -49,6 +49,11 @@ constexpr uint8_t AVG_NUM_DARK_SAMPLES = 32;
 constexpr unsigned int LOOP_MICROS = 10 * 1000;
 constexpr unsigned int LOOP_MILLIS = LOOP_MICROS / 1000;
 
+/** "Lock in" the specified effect for the next few seconds. */
+void lockEffect(const Effect e);
+/** "Lock in" the specified sentence for the next few seconds. */
+void lockSentence(const unsigned int sentenceId);
+
 // The top-level state machine of the system: it's either running, waiting for nightfall, or in
 // admin mode. Other state machines controlling LED signs, etc. are only valid in certain macro
 // states.

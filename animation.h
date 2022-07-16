@@ -19,7 +19,8 @@ enum Effect {
                      // real sentence. The sentence holds, and then individual words turn off
                      // to fade to black for outro.
 
-  EF_MAX_ENUM,       // Not a real Effect; serves to mark the highest-valued valid effect id.
+  EF_MAX_ENUM,       // Not a real Effect; serves to mark the highest-valued valid effect id
+                     // returned by randomEffect().
 
 // TODO(aaron): These are effectively layered effects that should be possible to 'or' on top of
 // the preceeding effects.
@@ -27,6 +28,11 @@ enum Effect {
                      // Only valid for sentences with 'ART' in them.
   EF_FRITZING_DONT,  // Like FRITZING_ART, but the word "DON'T" is what's zapping in and out.
   EF_ALT_LOVE_HATE,  // Alternate lighting the "LOVE" and "HATE" words.
+};
+
+/** Return a random Effect. */
+inline Effect randomEffect() {
+  return (Effect)random((uint32_t)EF_MAX_ENUM);
 };
 
 extern void debugPrintEffect(const Effect e);
@@ -95,6 +101,7 @@ public:
   bool isRunning() const { return _isRunning; }
   bool isComplete() const { return !_isRunning && _phaseCountRemaining == 0; };
   const Sentence &getSentence() const { return _sentence; };
+  Effect getEffect() const { return _effect; };
 
   void start(); // Start the animation sequence.
   void next(); // Perform the next step of animation.
