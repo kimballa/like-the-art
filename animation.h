@@ -19,6 +19,8 @@ enum Effect {
                      // real sentence. The sentence holds, and then individual words turn off
                      // to fade to black for outro.
 
+  EF_MAX_ENUM,       // Not a real Effect; serves to mark the highest-valued valid effect id.
+
 // TODO(aaron): These are effectively layered effects that should be possible to 'or' on top of
 // the preceeding effects.
   EF_FRITZING_ART,   // Like GLOW, but the word "ART" zaps in and out randomly, like neon on the fritz.
