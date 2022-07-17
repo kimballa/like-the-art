@@ -196,10 +196,10 @@ static bool pollDarkSensor() {
     isDark = (averagedDarkReading < ANALOG_DARK_SENSOR_IS_LIGHT_THRESHOLD) ? LIGHT : DARK;
   }
 
-  #ifdef REPORT_ANALOG_DARK_SENSOR
+  if (REPORT_ANALOG_DARK_SENSOR) {
     DBGPRINTU("DARK sensor avg:", averagedDarkReading);
     // DBGPRINTU("Current DARK Bool:", isDark);
-  #endif // REPORT_ANALOG_DARK_SENSOR
+  }
 
   if (isDark != prevDark) {
     lastDarkSensorChangeTime = now;

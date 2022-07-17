@@ -27,20 +27,14 @@ using namespace std;
 #include "animation.h"
 
 
-// Define this to be 1 for production, 0 for breadboard.
-#define IS_TARGET_PRODUCTION 1
+// Where is the Arduino installed?
+// Set this to be true for production, false for breadboard.
+constexpr bool IS_TARGET_PRODUCTION = true;
 
-// Where is the Arduino installed? Valid values are 'Breadboard' or 'Production'
-#if IS_TARGET_PRODUCTION == 1
-  #define TARGET_INSTALL Production
-#else
-  #define TARGET_INSTALL Breadboard
-#endif // if IS_TARGET_PRODUCTION
-
-// Define REPORT_ANALOG_DARK_SENSOR if you want the analog read value
+// Set REPORT_ANALOG_DARK_SENSOR to true if you want the analog read value
 // of the DARK sensor (avg of AVG_NUM_DARK_SAMPLES readings) reported on
 // the debug console.
-#define REPORT_ANALOG_DARK_SENSOR
+constexpr bool REPORT_ANALOG_DARK_SENSOR = true;
 
 // Number of DARK readings to average together to get a useful reading.
 constexpr uint8_t AVG_NUM_DARK_SAMPLES = 32;
