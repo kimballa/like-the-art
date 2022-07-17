@@ -53,9 +53,11 @@ extern "C" {
   void defaultBtnHandler(uint8_t btnId, uint8_t btnState);
   void emptyBtnHandler(uint8_t btnId, uint8_t btnState);
   void attachStandardButtonHandlers();
+  void attachWaitModeButtonHandlers();
   void attachEmptyButtonHandlers();
 };
 
 extern vector<Button> buttons;
+extern unsigned int numUserButtonFns();
 
 #endif /* _BUTTONS_H_ */

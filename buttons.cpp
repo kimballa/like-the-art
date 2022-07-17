@@ -11,9 +11,14 @@ static I2CParallel buttonBank;
 static constexpr uint8_t CODE_LENGTH = 10;
 static constexpr uint8_t MAX_PRESS_HISTORY = CODE_LENGTH + 1;
 static const uint8_t adminCodeSequence[CODE_LENGTH] = { 1, 0, 4, 8, 5, 1, 5, 6, 6, 3 };
-static uint8_t buttonPresses[MAX_PRESS_HISTORY]; // Circular rolling history buffer
+static uint8_t buttonHistory[MAX_PRESS_HISTORY]; // Circular rolling history buffer
 static uint8_t firstPressIdx;
 static uint8_t nextPressIdx;
+
+
+// In the RUNNING state, every 'N' button presses... we randomize what all the buttons do.
+static constexpr uint8_t BUTTON_ROTATION_THRESHOLD = 25;
+static uint8_t numButtonPresses = 0;
 
 // All 9 Button instances.
 vector<Button> buttons;
@@ -22,7 +27,7 @@ static void wipePasswordHistory() {
   firstPressIdx = 0;
   nextPressIdx = 0;
   for (uint8_t i = 0; i < MAX_PRESS_HISTORY; i++) {
-    buttonPresses[i] = 0;
+    buttonHistory[i] = 0;
   }
 }
 
@@ -42,27 +47,6 @@ void setupButtons() {
 
   wipePasswordHistory();
   attachStandardButtonHandlers();
-}
-
-/** Attach button handlers for RUNNING/WAITING modes. */
-void attachStandardButtonHandlers() {
-  // TODO(aaron): Attach more interesting button handlers to each Button.
-  for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
-    buttons[i].setHandler(defaultBtnHandler);
-    buttons[i].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
-    buttons[i].setReleaseDebounceInterval(BTN_DEBOUNCE_MILLIS);
-  }
-}
-
-/**
- * Attach the empty handler (and default timing) to all buttons.
- */
-void attachEmptyButtonHandlers() {
-  for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
-    buttons[i].setHandler(emptyBtnHandler);
-    buttons[i].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
-    buttons[i].setReleaseDebounceInterval(BTN_DEBOUNCE_MILLIS);
-  }
 }
 
 /**
@@ -109,7 +93,7 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
   }
 
   // Record the latest button press
-  buttonPresses[nextPressIdx] = btnId;
+  buttonHistory[nextPressIdx] = btnId;
   nextPressIdx = (nextPressIdx + 1) % MAX_PRESS_HISTORY;
   if (nextPressIdx == firstPressIdx) {
     firstPressIdx = (firstPressIdx + 1) % MAX_PRESS_HISTORY;
@@ -120,7 +104,7 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
   unsigned int counted = 0;
   for (uint8_t i = 0; i < min(CODE_LENGTH, (uint8_t)(nextPressIdx - firstPressIdx)); i++) {
     counted++;
-    if (buttonPresses[(i + firstPressIdx) % MAX_PRESS_HISTORY] != adminCodeSequence[i]) {
+    if (buttonHistory[(i + firstPressIdx) % MAX_PRESS_HISTORY] != adminCodeSequence[i]) {
       match = false;
     }
     if (!match) {
@@ -133,6 +117,15 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
     // Switch to admin macro state.
     setMacroStateAdmin();
     wipePasswordHistory();
+  } else {
+    // Increment the number of buttons that we've seen pressed.
+    numButtonPresses++;
+
+    // If that reaches the scrambling threshold, mix up the assignments for
+    // all the button handlers and reset the numButtonPresses counter.
+    if (numButtonPresses >= BUTTON_ROTATION_THRESHOLD) {
+      attachStandardButtonHandlers();
+    }
   }
 }
 
@@ -189,4 +182,153 @@ bool Button::update(uint8_t latestPoll) {
   return false; // No state change.
 }
 
+//// Button handler functions that change the active sentence or the active effect ////
 
+// Several buttons fix a particular active animation effect for several seconds:
+#define EFFECT_BTN_NAME(effect_enum) btnHandlerEffect_##effect_enum
+#define EFFECT_BTN_FN(effect_enum) \
+  extern "C" void EFFECT_BTN_NAME(effect_enum) (uint8_t btnId, uint8_t btnState) { \
+    recordButtonHistory(btnId, btnState); \
+    lockEffect(effect_enum); \
+  }
+
+EFFECT_BTN_FN(EF_APPEAR);
+EFFECT_BTN_FN(EF_GLOW);
+EFFECT_BTN_FN(EF_BLINK);
+EFFECT_BTN_FN(EF_BLINK_FAST);
+EFFECT_BTN_FN(EF_ONE_AT_A_TIME);
+EFFECT_BTN_FN(EF_BUILD);
+EFFECT_BTN_FN(EF_SNAKE);
+EFFECT_BTN_FN(EF_SLIDE_TO_END);
+EFFECT_BTN_FN(EF_MELT);
+
+// Other buttons fix a particular sentence to be the active sentence for several seconds.
+// There are 18 sentences defined, and we have a separate handler method to invoke each.
+#define SENTENCE_BTN_NAME(sentence_id) btnHandlerSentence_##sentence_id
+#define SENTENCE_BTN_FN(sentence_id) \
+  extern "C" void SENTENCE_BTN_NAME(sentence_id) (uint8_t btnId, uint8_t btnState) { \
+    recordButtonHistory(btnId, btnState); \
+    lockSentence(sentence_id); \
+  }
+
+SENTENCE_BTN_FN(0);
+SENTENCE_BTN_FN(1);
+SENTENCE_BTN_FN(2);
+SENTENCE_BTN_FN(3);
+SENTENCE_BTN_FN(4);
+SENTENCE_BTN_FN(5);
+SENTENCE_BTN_FN(6);
+SENTENCE_BTN_FN(7);
+SENTENCE_BTN_FN(8);
+SENTENCE_BTN_FN(9);
+SENTENCE_BTN_FN(10);
+SENTENCE_BTN_FN(11);
+SENTENCE_BTN_FN(12);
+SENTENCE_BTN_FN(13);
+SENTENCE_BTN_FN(14);
+SENTENCE_BTN_FN(15);
+SENTENCE_BTN_FN(16);
+SENTENCE_BTN_FN(17);
+
+// All the handlers that can be assigned to the 9 buttons in the running MacroState.
+static const buttonHandler_t userButtonFns[] = {
+  EFFECT_BTN_NAME(EF_APPEAR),
+  EFFECT_BTN_NAME(EF_GLOW),
+  EFFECT_BTN_NAME(EF_BLINK),
+  EFFECT_BTN_NAME(EF_BLINK_FAST),
+  EFFECT_BTN_NAME(EF_ONE_AT_A_TIME),
+  EFFECT_BTN_NAME(EF_BUILD),
+  EFFECT_BTN_NAME(EF_SNAKE),
+  EFFECT_BTN_NAME(EF_SLIDE_TO_END),
+  EFFECT_BTN_NAME(EF_MELT),
+
+  SENTENCE_BTN_NAME(0),
+  SENTENCE_BTN_NAME(1),
+  SENTENCE_BTN_NAME(2),
+  SENTENCE_BTN_NAME(3),
+  SENTENCE_BTN_NAME(4),
+  SENTENCE_BTN_NAME(5),
+  SENTENCE_BTN_NAME(6),
+  SENTENCE_BTN_NAME(7),
+  SENTENCE_BTN_NAME(8),
+  SENTENCE_BTN_NAME(9),
+  SENTENCE_BTN_NAME(10),
+  SENTENCE_BTN_NAME(11),
+  SENTENCE_BTN_NAME(12),
+  SENTENCE_BTN_NAME(13),
+  SENTENCE_BTN_NAME(14),
+  SENTENCE_BTN_NAME(15),
+  SENTENCE_BTN_NAME(16),
+  SENTENCE_BTN_NAME(17),
+};
+
+// The length of the userButtonFns array.
+static constexpr unsigned int NUM_USER_BUTTON_FNS = std::size(userButtonFns);
+unsigned int numUserButtonFns() {
+  return NUM_USER_BUTTON_FNS;
+}
+
+// The same array as userButtonFns, but with elements in shuffled order
+// to enable random button assignments.
+static buttonHandler_t shuffledUserButtonFns[NUM_USER_BUTTON_FNS];
+
+/** Shuffles the order of button handler functions in shuffledUserButtonFns. */
+static void shuffleButtonHandlers() {
+  // Number of shuffle operations to perform.
+  static constexpr unsigned int NUM_SHUFFLES = NUM_USER_BUTTON_FNS * 20;
+
+  // Initialize the shuffled button handler array from the pristine handler array.
+  memcpy(shuffledUserButtonFns, userButtonFns, sizeof(buttonHandler_t) * NUM_USER_BUTTON_FNS);
+
+  // Perform a number of exchanges between random positions in the array.
+  for (unsigned int i = 0; i < NUM_SHUFFLES; i++) {
+    unsigned int idxA = random(NUM_USER_BUTTON_FNS);
+    unsigned int idxB = random(NUM_USER_BUTTON_FNS);
+
+    buttonHandler_t tmp = shuffledUserButtonFns[idxA];
+    shuffledUserButtonFns[idxA] = shuffledUserButtonFns[idxB];
+    shuffledUserButtonFns[idxB] = tmp;
+  }
+}
+
+
+/** Attach button handlers for RUNNING mode -- assign random effects to each btn. */
+void attachStandardButtonHandlers() {
+  DBGPRINT("Setting randomly-assigned button handlers...");
+
+  // Create an array of all possible button handlers in a random order...
+  shuffleButtonHandlers();
+
+  // ... And choose the first `NUM_BUTTONS` elements from it.
+  for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
+    buttons[i].setHandler(shuffledUserButtonFns[i]);
+
+    buttons[i].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
+    buttons[i].setReleaseDebounceInterval(BTN_DEBOUNCE_MILLIS);
+  }
+
+  numButtonPresses = 0; // Reset the counter for when to next scramble the buttons.
+}
+
+// For WAITING MacroState, attach button handlers that track history and can shift
+// into admin mode but do not start or change any animations.
+void attachWaitModeButtonHandlers() {
+  DBGPRINT("Resetting to default button handlers...");
+
+  for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
+    buttons[i].setHandler(defaultBtnHandler);
+    buttons[i].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
+    buttons[i].setReleaseDebounceInterval(BTN_DEBOUNCE_MILLIS);
+  }
+}
+
+/**
+ * Attach the empty handler (and default timing) to all buttons.
+ */
+void attachEmptyButtonHandlers() {
+  for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
+    buttons[i].setHandler(emptyBtnHandler);
+    buttons[i].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
+    buttons[i].setReleaseDebounceInterval(BTN_DEBOUNCE_MILLIS);
+  }
+}

@@ -312,6 +312,17 @@ void setup() {
   }
 
   debouncedDarkState = prevDark;  // Make our debouncer state consistent with macro state.
+
+  // Runtime validation of our config: the number of button handler functions must match
+  // the number of effects and sentences defined. Otherwise, we either left one out, or
+  // something more dangerous, like defined a sentence button for an invalid sentence id.
+  if (numUserButtonFns() != EF_MAX_ENUM + sentences.size()) {
+    DBGPRINTU("*** WARNING: User button handler function array has inconsistent size:", numUserButtonFns());
+    DBGPRINTU("  Effect enum count:", (unsigned int)EF_MAX_ENUM);
+    DBGPRINTU("  Sentence array length:", sentences.size());
+    DBGPRINTU("  Expected button handler array length:", (unsigned int)EF_MAX_ENUM + sentences.size());
+    DBGPRINTU("  Actual button handler array length:", numUserButtonFns());
+  }
 }
 
 void setMacroStateRunning() {
@@ -319,17 +330,20 @@ void setMacroStateRunning() {
 
   macroState = MS_RUNNING;
 
-  // reset effect locks
+  // Clear locked effect/sentence.
   remainingLockedSentenceMillis = 0;
   remainingLockedEffectMillis = 0;
 
+  // Attach a random assortment of button handlers.
   attachStandardButtonHandlers();
 }
 
 void setMacroStateWaiting() {
   DBGPRINT(">>>> Entering WAITING MacroState <<<<");
   macroState = MS_WAITING;
-  attachStandardButtonHandlers();
+  // Buttons can enter admin mode but do not change sign effect.
+  attachWaitModeButtonHandlers();
+  activeAnimation.stop();
   allSignsOff();
   // TODO(aaron): Put the ATSAMD51 to sleep for a while?
   // TODO(aaron): If we do go to sleep, we need to enable an interrupt to watch for the
@@ -401,6 +415,20 @@ static void loopStateRunning() {
     sentenceId = mainMsgId();
   }
 
+  // Paranoia: don't dereference an invalid sentence id or unknown effect.
+  if (sentenceId >= sentences.size()) {
+    DBGPRINTU("*** ERROR: Invalid sentence id:", sentenceId);
+    DBGPRINTU("Sentence array size is", sentences.size());
+    DBGPRINT("(Resetting to display default sentence.)");
+    sentenceId = mainMsgId();
+  }
+
+  if (newEffect >= EF_MAX_ENUM) {
+    DBGPRINTU("*** ERROR: Invalid effect id:", newEffect);
+    DBGPRINT("(Resetting to default effect.)");
+    newEffect = EF_APPEAR;
+  }
+
   const Sentence &newSentence = sentences[sentenceId];
 
   DBGPRINT("Setting up new animation for sentence:");
@@ -442,7 +470,7 @@ void loop() {
     // or wait for an interrupt to wake us.
     break;
   default:
-    DBGPRINTI("ERROR -- unknown MacroState:", macroState);
+    DBGPRINTI("*** ERROR: Unknown MacroState:", macroState);
     DBGPRINT("Reverting to running state");
     setMacroStateRunning();
   }
@@ -456,6 +484,15 @@ void lockEffect(const Effect e) {
   lockedEffect = e;
   remainingLockedEffectMillis = EFFECT_LOCK_MILLIS;
 
+  if ((unsigned int)lockedEffect >= (unsigned int)EF_MAX_ENUM) {
+    DBGPRINTU("Invalid effect id for lock:", (unsigned int)lockedEffect);
+    DBGPRINT("(Resetting to default effect.)");
+    lockedEffect = EF_APPEAR;
+  }
+
+  DBGPRINTU("Locked effect id:", (unsigned int)lockedEffect);
+  debugPrintEffect(lockedEffect);
+
   // Start a new animation with the chosen effect and current sentence.
   activeAnimation.stop();
   activeAnimation.setParameters(activeAnimation.getSentence(), lockedEffect, 0, 0);
@@ -466,6 +503,14 @@ void lockEffect(const Effect e) {
 void lockSentence(const unsigned int sentenceId) {
   lockedSentenceId = sentenceId;
   remainingLockedSentenceMillis = SENTENCE_LOCK_MILLIS;
+
+  if (lockedSentenceId >= sentences.size()) {
+    DBGPRINTU("Invalid sentence id for lock:", lockedSentenceId);
+    DBGPRINT("(Resetting to default sentence id.)");
+    lockedSentenceId = mainMsgId();
+  }
+
+  DBGPRINTU("Locked sentence id:", lockedSentenceId);
 
   // Start a new animation with the chosen sentence and current effect.
   activeAnimation.stop();
