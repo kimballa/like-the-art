@@ -11,7 +11,7 @@ static unsigned int _sentence(const unsigned int signVector) {
   static unsigned int nextSentenceId = 0;
 
   sentences.emplace_back(nextSentenceId, signVector);
-  nextSentenceId++;
+  return nextSentenceId++;
 }
 
 // sentence id for "You don't have to like all the art!"
