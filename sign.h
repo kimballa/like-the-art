@@ -11,6 +11,7 @@
 class SignChannel {
 public:
   SignChannel() { };
+  virtual ~SignChannel() {};
   virtual void setup() = 0;
   virtual void enable() = 0;
   virtual void disable() = 0;

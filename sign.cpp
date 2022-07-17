@@ -58,7 +58,9 @@ void Sign::enable() {
 void Sign::disable() {
   //DBGPRINTU("Disable sign:", _id);
   //DBGPRINT(_word);
-  this->_channel->disable();
+  if (NULL != this->_channel) {
+    this->_channel->disable();
+  }
   this->_active = false;
   activeSignBits &= ~(1 << _id);
 }

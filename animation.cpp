@@ -340,7 +340,7 @@ bool Animation::_slidePickNextZipTarget() {
   } else {
     // We are in PHASE_OUTRO. (This method is not valid in PHASE_HOLD.)
     // Search left-to-right for a target as we zip out the words.
-    for (int i = _slideCurTargetSignId; i < NUM_SIGNS; i++) {
+    for (unsigned int i = _slideCurTargetSignId; i < NUM_SIGNS; i++) {
       if (signBits & (1 << i)) {
         _slideCurTargetSignId = i;
         found = true;

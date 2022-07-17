@@ -54,10 +54,12 @@ PwmTimer makePwmTimer(uint32_t arduinoPin, uint32_t pwmFreq, int &retval) {
 PwmTimer::PwmTimer(uint32_t portGroup, uint32_t portPin, uint32_t portFn, Tcc* const tcc,
     uint32_t pwmChannel, uint32_t pwmFreq, uint32_t pwmPrescaler):
     _portGroup(portGroup), _portPin(portPin), _portPinBit((uint32_t)(1 << portPin)),
-    _portFn(portFn), _TCC(tcc), _pwmChannel(pwmChannel),
-    _pwmFreq(pwmFreq), _pwmPrescaler(pwmPrescaler),
+    _portFn(portFn),
+    _pwmChannel(pwmChannel), _pwmFreq(pwmFreq), _pwmPrescaler(pwmPrescaler),
     _pwmClockHz(TCC_PLL_FREQ / pwmPrescaler),
-    _pwmWaveCount((_pwmClockHz / pwmFreq) - 1), _dutyCycle(pwmFreq / 2)
+    _pwmWaveCount((_pwmClockHz / pwmFreq) - 1),
+    _dutyCycle(pwmFreq / 2),
+    _TCC(tcc)
     {
 }
 
