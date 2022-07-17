@@ -13,6 +13,7 @@
 
 #include <I2CParallel.h>
 #include <Adafruit_NeoPixel.h>
+#include <Adafruit_SleepyDog.h>
 #include <dbg.h>
 
 using namespace std;
@@ -42,6 +43,9 @@ constexpr uint8_t AVG_NUM_DARK_SAMPLES = 32;
 /** Every loop iteration lasts for 10ms. */
 constexpr unsigned int LOOP_MICROS = 10 * 1000;
 constexpr unsigned int LOOP_MILLIS = LOOP_MICROS / 1000;
+
+/** The Watchdog timer resets the MCU if not pinged once per 2 seconds. */
+constexpr unsigned int WATCHDOG_TIMEOUT_MILLIS = 2000;
 
 /** "Lock in" the specified effect for the next few seconds. */
 void lockEffect(const Effect e);

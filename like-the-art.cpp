@@ -323,6 +323,9 @@ void setup() {
     DBGPRINTU("  Expected button handler array length:", (unsigned int)EF_MAX_ENUM + sentences.size());
     DBGPRINTU("  Actual button handler array length:", numUserButtonFns());
   }
+
+  // Set up WDT failsafe.
+  Watchdog.enable(WATCHDOG_TIMEOUT_MILLIS);
 }
 
 void setMacroStateRunning() {
@@ -447,6 +450,9 @@ static void loopStateRunning() {
 
 void loop() {
   unsigned int loopStartMicros = micros();
+
+  // Tell WDT we're still alive. (Required once per 2 seconds; this loop targets 10ms loop time.)
+  Watchdog.reset();
 
   // Poll buttons and dark sensor every loop.
   pollButtons();
