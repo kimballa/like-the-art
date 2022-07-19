@@ -74,11 +74,14 @@ uint32_t Animation::getOptimalDuration(const Sentence &s, const Effect e, const 
     // approx 4 seconds total (250ms on / 250 ms off x 8 blinks)
     return durationForFastBlinkCount(8);
   case EF_ONE_AT_A_TIME:
-    return s.getNumWords() * 500; // 1/2 sec of each word in sentence.
+    // Show each word in sentence by itself for 1 second, followed by 'N' seconds of blank.
+    return (s.getNumWords() + ONE_AT_A_TIME_BLANK_PHASES) * ONE_AT_A_TIME_WORD_DELAY;
   case EF_BUILD:
-    return s.getNumWords() * 500; // words in sentence light up 1/2 sec apart.
+    // words in sentence light up 1/2 sec apart, and it has a full-sentence hold phase at the end.
+    return s.getNumWords() * BUILD_WORD_DELAY + BUILD_WORD_HOLD_DURATION;
   case EF_SNAKE:
-    return 2 * s.getNumWords() * 500; // words in sentence light up and tear down 1/2 sec apart.
+    // words in sentence light up and tear down 3/4 sec apart.
+    return 2 * s.getNumWords() * SNAKE_WORD_DELAY;
   case EF_SLIDE_TO_END:
     // Each word lights up by zipping through all preceeding words. (O(n^2) behavior.)
     // So the ids/positions of the words in the sentence give the proportion of time required
@@ -148,16 +151,16 @@ void Animation::_setParamsBlinkFast(const Sentence &s, const Effect e, uint32_t 
 void Animation::_setParamsOneAtATime(const Sentence &s, const Effect e, uint32_t flags,
     uint32_t milliseconds) {
   // Have N phases where N = number of words in sentence. One word at a time is lit.
-  _phaseCountRemaining = s.getNumWords();
+  _phaseCountRemaining = s.getNumWords() + ONE_AT_A_TIME_BLANK_PHASES;
   _phaseDuration = milliseconds / _phaseCountRemaining;
   DBGPRINTU("New animation: EF_ONE_AT_A_TIME", milliseconds);
 }
 
 void Animation::_setParamsBuild(const Sentence &s, const Effect e, uint32_t flags,
     uint32_t milliseconds) {
-  // Have N phases where N = number of words in sentence; in phase k the first k words of the
-  // sentence are lit.
-  _phaseCountRemaining = s.getNumWords();
+  // Have N + M phases where N = number of words in sentence; in phase k the first k words of the
+  // sentence are lit. M is the number of 'hold' phases for which the whole sentence remains lit.
+  _phaseCountRemaining = s.getNumWords() + BUILD_WORD_HOLD_PHASES;
   _phaseDuration = milliseconds / _phaseCountRemaining;
   DBGPRINTU("New animation: EF_BUILD", milliseconds);
 }
@@ -165,7 +168,7 @@ void Animation::_setParamsBuild(const Sentence &s, const Effect e, uint32_t flag
 void Animation::_setParamsSnake(const Sentence &s, const Effect e, uint32_t flags,
     uint32_t milliseconds) {
   // Like BUILD, but also "unbuild" by then turning off the 1st word, then the
-  // 2nd... until all is dark.
+  // 2nd... until all is dark; then hold that for ONE_AT_A_TIME_BLANK_PHASES.
   _phaseCountRemaining = s.getNumWords() * 2;
   _phaseDuration = milliseconds / _phaseCountRemaining;
   DBGPRINTU("New animation: EF_SNAKE", milliseconds);
@@ -447,6 +450,12 @@ void Animation::_nextOneAtATime() {
   if (_isFirstPhaseTic) {
     allSignsOff();
 
+    if (_phaseCountRemaining <= ONE_AT_A_TIME_BLANK_PHASES) {
+      // Final phase(s) we just keep the sign blank to add some breathing room
+      // before the next sentence animation begins.
+      return;
+    }
+
     // Show the N'th word in the sentence.
     signBits = _sentence.getSignBits();
     // Find the n'th word.
@@ -478,6 +487,13 @@ void Animation::_nextBuild() {
 
   // Logic very similar to ONE_AT_A_TIME but previously-shown words remain lit.
   if (_isFirstPhaseTic) {
+    if (_phaseCountRemaining <= BUILD_WORD_HOLD_PHASES) {
+      // We're in the last few phases, which just keep the whole sentence lit.
+      // Nothing further to do.
+      _sentence.enableExclusively();
+      return;
+    }
+
     // Turn on the N'th word in the sentence.
     signBits = _sentence.getSignBits();
     // Find the n'th word.

@@ -64,6 +64,21 @@ constexpr unsigned int PHASE_INTRO = 0;
 constexpr unsigned int PHASE_HOLD = 1;
 constexpr unsigned int PHASE_OUTRO = 2;
 
+// Duration (millis) for which EF_ONE_AT_A_TIME shows each word:
+constexpr unsigned int ONE_AT_A_TIME_WORD_DELAY = 1000;
+// Number of phases (of len OAAT_WORD_DELAY) at the end when we hold a blank screen.
+constexpr unsigned int ONE_AT_A_TIME_BLANK_PHASES = 2;
+
+// Duration (millis) between lighting up words in EF_BUILD.
+constexpr unsigned int BUILD_WORD_DELAY = 500;
+// Number of phases (of len BUILD_WORD_DELAY) for which we hold the whole sentence
+// after it's all lit in EF_BUILD.
+constexpr unsigned int BUILD_WORD_HOLD_PHASES = 4;
+constexpr unsigned int BUILD_WORD_HOLD_DURATION = BUILD_WORD_HOLD_PHASES * BUILD_WORD_DELAY;
+
+// Duration (millis) between lighting up or turning off words in EF_SNAKE.
+constexpr unsigned int SNAKE_WORD_DELAY = 750;
+
 /**
  * An animation makes a sentence appear with a specified effect.
  *
