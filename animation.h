@@ -10,6 +10,7 @@ enum Effect {
   EF_BLINK_FAST,
   EF_ONE_AT_A_TIME,  // Highlight each word in series, turning off word n before showing n+1.
   EF_BUILD,          // Light up incrementally more words one at a time left-to-right
+  EF_BUILD_RANDOM,   // Like EF_BUILD, but light 'em up in randomly-chosen order.
   EF_SNAKE,          // Like BUILD, but also "unbuild" by then turning off the 1st word, then the
                      // 2nd... until all is dark.
   EF_SLIDE_TO_END,   // Make a light pulse "zip" through all the words until reaching the last
@@ -73,8 +74,13 @@ constexpr unsigned int ONE_AT_A_TIME_BLANK_PHASES = 2;
 constexpr unsigned int BUILD_WORD_DELAY = 500;
 // Number of phases (of len BUILD_WORD_DELAY) for which we hold the whole sentence
 // after it's all lit in EF_BUILD.
-constexpr unsigned int BUILD_WORD_HOLD_PHASES = 4;
-constexpr unsigned int BUILD_WORD_HOLD_DURATION = BUILD_WORD_HOLD_PHASES * BUILD_WORD_DELAY;
+constexpr unsigned int BUILD_HOLD_PHASES = 4;
+constexpr unsigned int BUILD_HOLD_DURATION = BUILD_HOLD_PHASES * BUILD_WORD_DELAY;
+
+// Duration (millis) between lighting up words in EF_BUILD_RANDOM.
+constexpr unsigned int BUILD_RANDOM_WORD_DELAY = 1000;
+constexpr unsigned int BUILD_RANDOM_HOLD_PHASES = 2;
+constexpr unsigned int BUILD_RANDOM_HOLD_DURATION = BUILD_RANDOM_HOLD_PHASES * BUILD_RANDOM_WORD_DELAY;
 
 // Duration (millis) between lighting up or turning off words in EF_SNAKE.
 constexpr unsigned int SNAKE_WORD_DELAY = 750;
@@ -134,6 +140,7 @@ private:
   void _setParamsBlinkFast(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
   void _setParamsOneAtATime(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
   void _setParamsBuild(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsBuildRandom(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
   void _setParamsSnake(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
   void _setParamsSlide(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
   void _setParamsMelt(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
@@ -144,6 +151,7 @@ private:
   void _nextBlinkFast();
   void _nextOneAtATime();
   void _nextBuild();
+  void _nextBuildRandom();
   void _nextSnake();
   void _nextSlide();
   void _nextMelt();
@@ -186,6 +194,9 @@ private:
   unsigned int _availableMeltSet;  // the bitmask of words we are allowed to melt in this phase.
   unsigned int _numWordsLeftToMelt; // number of words in available melt set
   void _meltWord();
+
+  // EF_BUILD_RANDOM
+  uint8_t _buildRandomOrder[NUM_SIGNS]; // Order we light up signs in this animation.
 };
 
 extern Animation activeAnimation;

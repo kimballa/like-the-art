@@ -22,6 +22,9 @@ void debugPrintEffect(const Effect e) {
   case EF_BUILD:
     DBGPRINT("EF_BUILD");
     break;
+  case EF_BUILD_RANDOM:
+    DBGPRINT("EF_BUILD_RANDOM");
+    break;
   case EF_SNAKE:
     DBGPRINT("EF_SNAKE");
     break;
@@ -78,7 +81,9 @@ uint32_t Animation::getOptimalDuration(const Sentence &s, const Effect e, const 
     return (s.getNumWords() + ONE_AT_A_TIME_BLANK_PHASES) * ONE_AT_A_TIME_WORD_DELAY;
   case EF_BUILD:
     // words in sentence light up 1/2 sec apart, and it has a full-sentence hold phase at the end.
-    return s.getNumWords() * BUILD_WORD_DELAY + BUILD_WORD_HOLD_DURATION;
+    return s.getNumWords() * BUILD_WORD_DELAY + BUILD_HOLD_DURATION;
+  case EF_BUILD_RANDOM:
+    return s.getNumWords() * BUILD_RANDOM_WORD_DELAY + BUILD_RANDOM_HOLD_DURATION;
   case EF_SNAKE:
     // words in sentence light up and tear down 3/4 sec apart.
     return 2 * s.getNumWords() * SNAKE_WORD_DELAY;
@@ -160,9 +165,48 @@ void Animation::_setParamsBuild(const Sentence &s, const Effect e, uint32_t flag
     uint32_t milliseconds) {
   // Have N + M phases where N = number of words in sentence; in phase k the first k words of the
   // sentence are lit. M is the number of 'hold' phases for which the whole sentence remains lit.
-  _phaseCountRemaining = s.getNumWords() + BUILD_WORD_HOLD_PHASES;
+  _phaseCountRemaining = s.getNumWords() + BUILD_HOLD_PHASES;
   _phaseDuration = milliseconds / _phaseCountRemaining;
   DBGPRINTU("New animation: EF_BUILD", milliseconds);
+}
+
+void Animation::_setParamsBuildRandom(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+  // Have N + M phases where N = number of words in sentence; in phase k, a random k words of the
+  // sentence are lit. M is the number of 'hold' phases for which the whole sentence remains lit.
+  _phaseCountRemaining = s.getNumWords() + BUILD_RANDOM_HOLD_PHASES;
+  _phaseDuration = milliseconds / _phaseCountRemaining;
+
+  // Randomize the order we light up the sentence words in this animation session:
+
+  // Step 1: Reset ordering array.
+  memset(_buildRandomOrder, 0, sizeof(unsigned int) * NUM_SIGNS);
+
+  // Step 2: Put sign ids into the ordering array sequentially.
+  uint32_t signBits = s.getSignBits();
+  uint32_t idx = 0;
+  for (uint8_t i = 0; i < NUM_SIGNS; i++) {
+    if (signBits & (1 << i)) {
+      _buildRandomOrder[idx++] = i;
+    }
+  }
+
+  // Step 3: Shuffle the elements of the array.
+  // We have populated the first `numWords` elements of the array.
+  uint32_t numWords = s.getNumWords();
+  constexpr unsigned int rounds = NUM_SIGNS * 20;
+  for (uint32_t i = 0; i < rounds; i++) {
+    unsigned int idxA = random(numWords);
+    unsigned int idxB = random(numWords);
+    uint8_t tmp = _buildRandomOrder[idxA];
+    _buildRandomOrder[idxA] = _buildRandomOrder[idxB];
+    _buildRandomOrder[idxB] = tmp;
+  }
+
+  // ... now the first `numWords` elements of the array contain the sign ids to light up,
+  // in a scrambled order. Rely on this during the animation frames.
+
+  DBGPRINTU("New animation: EF_BUILD_RANDOM", milliseconds);
 }
 
 void Animation::_setParamsSnake(const Sentence &s, const Effect e, uint32_t flags,
@@ -288,6 +332,9 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
     break;
   case EF_BUILD:
     _setParamsBuild(s, e, flags, milliseconds);
+    break;
+  case EF_BUILD_RANDOM:
+    _setParamsBuildRandom(s, e, flags, milliseconds);
     break;
   case EF_SNAKE:
     _setParamsSnake(s, e, flags, milliseconds);
@@ -487,7 +534,7 @@ void Animation::_nextBuild() {
 
   // Logic very similar to ONE_AT_A_TIME but previously-shown words remain lit.
   if (_isFirstPhaseTic) {
-    if (_phaseCountRemaining <= BUILD_WORD_HOLD_PHASES) {
+    if (_phaseCountRemaining <= BUILD_HOLD_PHASES) {
       // We're in the last few phases, which just keep the whole sentence lit.
       // Nothing further to do.
       _sentence.enableExclusively();
@@ -514,6 +561,23 @@ void Animation::_nextBuild() {
     }
 
     signs[highlightWord].enable();
+  }
+}
+
+void Animation::_nextBuildRandom() {
+  // Logic as in EF_BUILD, but instead of lighting up the n'th sign of the sentence in phase n,
+  // we use the sign id from _buildRandomOrder[n]. There's no inner loop here because it got
+  // pulled into the planning step method (_setParamsBuildRandom()).
+  if (_isFirstPhaseTic) {
+    if (_phaseCountRemaining <= BUILD_RANDOM_HOLD_PHASES) {
+      // We're in the last few phases, which just keep the whole sentence lit.
+      // Nothing further to do.
+      _sentence.enableExclusively();
+      return;
+    }
+
+    // Turn on the N'th word in the shuffled sentence light-up order.
+    signs[_buildRandomOrder[_curPhaseNum]].enable();
   }
 }
 
@@ -750,6 +814,9 @@ void Animation::next() {
     break;
   case EF_BUILD:
     _nextBuild();
+    break;
+  case EF_BUILD_RANDOM:
+    _nextBuildRandom();
     break;
   case EF_SNAKE:
     _nextSnake();
