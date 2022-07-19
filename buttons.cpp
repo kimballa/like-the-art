@@ -291,7 +291,6 @@ static void shuffleButtonHandlers() {
   }
 }
 
-
 /** Attach button handlers for RUNNING mode -- assign random effects to each btn. */
 void attachStandardButtonHandlers() {
   DBGPRINT("Setting randomly-assigned button handlers...");

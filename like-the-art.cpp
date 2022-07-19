@@ -243,10 +243,10 @@ void setup() {
   Wire.begin();
   parallelBank0.init(0 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
   parallelBank0.write(0); // Turn off signs asap so we don't spend too much time in all-on state.
-#if IS_TARGET_PRODUCTION == 1
-  parallelBank1.init(1 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
-  parallelBank1.write(0);
-#endif // I2C bank 1 only in prod, not in breadboard.
+  if constexpr (IS_TARGET_PRODUCTION) {
+    parallelBank1.init(1 + I2C_PCF8574_MIN_ADDR, I2C_SPEED_STANDARD);
+    parallelBank1.write(0);
+  } // I2C bank 1 only in prod, not in breadboard.
 
   printWhyLastReset();
 

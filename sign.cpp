@@ -93,11 +93,14 @@ const char *const W_QUESTION = "?";
 static constexpr unsigned int SENTENCE_LEN = 64; // At most 62 chars + \0 in the sentence.
 static char activeSentence[SENTENCE_LEN];
 
-#if (IS_TARGET_PRODUCTION)
+void setupSigns(I2CParallel &bank0, I2CParallel &bank1) {
+  // Define Signs with bindings to I/O channels.
+  signs.clear();
+  signs.reserve(NUM_SIGNS);
 
-  // Setup the signs array to have channels reflecting the actual
-  // production connections through the PCBs to all 16 LED neon signs.
-  static void setupSignsVector(I2CParallel &bank0, I2CParallel &bank1) {
+  if constexpr (IS_TARGET_PRODUCTION) {
+    // Setup the signs array to have channels reflecting the actual
+    // production connections through the PCBs to all 16 LED neon signs.
     DBGPRINT("Initializing PRODUCTION sign channel bindings (x16).");
 
     // Note that the production channels are NOT wired in order in I2C; see schematic.
@@ -118,13 +121,10 @@ static char activeSentence[SENTENCE_LEN];
     signs.emplace_back(13, W_ART,       new I2CSC(bank1, 6));
     signs.emplace_back(14, W_BANG,      new I2CSC(bank1, 5));
     signs.emplace_back(15, W_QUESTION,  new I2CSC(bank1, 7));
-  }
-
-#else  // !(IS_TARGET_PRODUCTION) case; breadboard-mode.
-
-  // Setup the signs array to have channels reflecting the
-  // connections available on the breadboard model (4 standard THT LEDs).
-  static void setupSignsVector(I2CParallel &bank0, I2CParallel &bank1) {
+  } else {
+    // !(IS_TARGET_PRODUCTION) case; breadboard-mode.
+    // Setup the signs array to have channels reflecting the
+    // connections available on the breadboard model (4 standard THT LEDs).
     DBGPRINT("Initializing BREADBOARD sign channel bindings (x4).");
 
     signs.emplace_back(0, W_WHY,  new I2CSC(bank0, 0));
@@ -145,16 +145,6 @@ static char activeSentence[SENTENCE_LEN];
     signs.emplace_back(14, W_BANG,      new NSC());
     signs.emplace_back(15, W_QUESTION,  new NSC());
   }
-
-#endif // IS_TARGET_PRODUCTION
-
-void setupSigns(I2CParallel &bank0, I2CParallel &bank1) {
-  // Define Signs with bindings to I/O channels.
-  signs.clear();
-  signs.reserve(NUM_SIGNS);
-
-  // Calls appropriate conditionally-compiled setupSignsVector above.
-  setupSignsVector(bank0, bank1);
 }
 
 void allSignsOff() {
