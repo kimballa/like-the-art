@@ -41,8 +41,11 @@ static unsigned int remainingLockedEffectMillis;
 static unsigned int remainingLockedSentenceMillis;
 
 // When a button press "locks" an effect or sentence, how long is it initially locked for?
-static constexpr unsigned int EFFECT_LOCK_MILLIS = 10000;
-static constexpr unsigned int SENTENCE_LOCK_MILLIS = 10000;
+static constexpr unsigned int EFFECT_LOCK_MILLIS = 20000;
+static constexpr unsigned int SENTENCE_LOCK_MILLIS = 20000;
+
+// What are the % odds that the loop chooses the main sentence as the next sentence to display?
+static unsigned int mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE;
 
 // Neopixel intensity is increasing each tick if true.
 static bool isNeoPixelIncreasing = true;
@@ -326,6 +329,9 @@ void setMacroStateRunning() {
   remainingLockedSentenceMillis = 0;
   remainingLockedEffectMillis = 0;
 
+  // Reset any prior temperature rise.
+  mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE;
+
   // Attach a random assortment of button handlers.
   attachStandardButtonHandlers();
 }
@@ -399,12 +405,24 @@ static void loopStateRunning() {
   if (remainingLockedSentenceMillis > 0) {
     // Use the sentence locked in by user.
     sentenceId = lockedSentenceId;
-  } else if (random(2)) {
-    // 50% of the (unlocked) time choose a random sentence from the mix.
-    sentenceId = random(sentences.size());
   } else {
-    // All other times just display the main message.
-    sentenceId = mainMsgId();
+    unsigned int curTemperature = random(MAIN_SENTENCE_MAX_TEMPERATURE);
+    if (curTemperature < mainSentenceTemperature) {
+      // Some percentage of the (unlocked) time (mainSentenceTemperature / MAX_TEMPERATURE),
+      // we choose the main message.
+      sentenceId = mainMsgId();
+      mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE; // Cool off any temperature rise.
+    } else {
+      // The rest of the time, we choose a random sentence from the mix.
+      sentenceId = random(sentences.size());
+      // But the temperature rises, making the main sentence a bit more likely next time around.
+      mainSentenceTemperature += TEMPERATURE_INCREMENT;
+      if (sentenceId == mainMsgId()) {
+        // ... Unless the random carousel sentence is actually the main message, in which case
+        // we reset the odds to the default temperature.
+        mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE;
+      }
+    }
   }
 
   // Paranoia: don't dereference an invalid sentence id or unknown effect.

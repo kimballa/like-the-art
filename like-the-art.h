@@ -47,6 +47,15 @@ constexpr unsigned int LOOP_MILLIS = LOOP_MICROS / 1000;
 /** The Watchdog timer resets the MCU if not pinged once per 2 seconds. */
 constexpr unsigned int WATCHDOG_TIMEOUT_MILLIS = 2000;
 
+// The main loop selects either the main YDHTLATA! sentence or a different random sentence.
+// It chooses a random number X in [0, MAX_TEMP) and if X < main_sentence_temperature, the
+// main sentence is chosen. Otherwise, the temperature rises by TEMPERATURE_INCREMENT for
+// the next sentence choice.
+constexpr unsigned int MAIN_SENTENCE_BASE_TEMPERATURE = 200;
+constexpr unsigned int TEMPERATURE_INCREMENT = 50;
+constexpr unsigned int MAIN_SENTENCE_MAX_TEMPERATURE = 1000;
+
+
 /** "Lock in" the specified effect for the next few seconds. */
 void lockEffect(const Effect e);
 /** "Lock in" the specified sentence for the next few seconds. */
