@@ -462,6 +462,7 @@ void Animation::_nextOneAtATime() {
       if (numWordsSeen == targetWordIdx) {
         // This sign bit is the word to highlight.
         highlightWord = i;
+        break;
       }
     }
 
@@ -492,6 +493,7 @@ void Animation::_nextBuild() {
       if (numWordsSeen == targetWordIdx) {
         // This sign bit is the word to highlight.
         highlightWord = i;
+        break;
       }
     }
 
@@ -533,6 +535,7 @@ void Animation::_nextSnake() {
       if (numWordsSeen == targetWordIdx) {
         // This sign bit is the word to highlight or turn off.
         highlightWord = i;
+        break;
       }
     }
 
