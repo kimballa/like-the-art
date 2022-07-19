@@ -196,7 +196,7 @@ static bool pollDarkSensor() {
     isDark = (averagedDarkReading < ANALOG_DARK_SENSOR_IS_LIGHT_THRESHOLD) ? LIGHT : DARK;
   }
 
-  if (REPORT_ANALOG_DARK_SENSOR) {
+  if constexpr (REPORT_ANALOG_DARK_SENSOR) {
     DBGPRINTU("DARK sensor avg:", averagedDarkReading);
     // DBGPRINTU("Current DARK Bool:", isDark);
   }

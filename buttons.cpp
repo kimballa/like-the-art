@@ -124,6 +124,7 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
     // If that reaches the scrambling threshold, mix up the assignments for
     // all the button handlers and reset the numButtonPresses counter.
     if (numButtonPresses >= BUTTON_ROTATION_THRESHOLD) {
+      DBGPRINTU("Reassigning button handlers because reached threshold", numButtonPresses);
       attachStandardButtonHandlers();
     }
   }
