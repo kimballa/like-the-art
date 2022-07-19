@@ -18,17 +18,6 @@ static Tcc* const TCC = TCC0;
 constexpr unsigned int PWM_CHANNEL = 0;
 constexpr unsigned int PWM_FREQ = 6000; // 6 KHz
 
-constexpr unsigned long COARSE_STEP_DELAY = 1000 * 1000; // microseconds per step.
-constexpr unsigned long FINE_STEP_DELAY = 25 * 1000; // microseconds.
-constexpr unsigned long HOLD_TOP_DELAY = 2000 * 1000;
-constexpr unsigned long HOLD_BOTTOM_DELAY = 500 * 1000;
-
-constexpr unsigned int NUM_STEPS_COARSE = 10;
-constexpr unsigned int NUM_STEPS_FINE = 200;
-
-constexpr unsigned int COARSE_STEP_SIZE = PWM_FREQ / NUM_STEPS_COARSE;
-constexpr unsigned int FINE_STEP_SIZE = PWM_FREQ / NUM_STEPS_FINE;
-
 PwmTimer pwmTimer(PORT_GROUP, PORT_PIN, PORT_FN, TCC, PWM_CHANNEL, PWM_FREQ, DEFAULT_PWM_PRESCALER);
 
 // Integrated neopixel on D8.
