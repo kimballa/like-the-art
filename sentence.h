@@ -36,4 +36,6 @@ extern vector<Sentence> sentences;
 extern "C" void setupSentences();
 extern "C" unsigned int mainMsgId();
 
+constexpr unsigned int INVALID_SENTENCE_ID = INT_MAX;
+
 #endif /* _SENTENCE_H */

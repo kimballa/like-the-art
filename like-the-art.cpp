@@ -47,6 +47,9 @@ static constexpr unsigned int SENTENCE_LOCK_MILLIS = 20000;
 // What are the % odds that the loop chooses the main sentence as the next sentence to display?
 static unsigned int mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE;
 
+// The id of the previous sentence shown.
+static unsigned int lastSentenceId = INVALID_SENTENCE_ID;
+
 // Neopixel intensity is increasing each tick if true.
 static bool isNeoPixelIncreasing = true;
 static constexpr float NEO_PIXEL_INCREMENT = 1.0f / 256.0f;
@@ -332,6 +335,9 @@ void setMacroStateRunning() {
   // Reset any prior temperature rise.
   mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE;
 
+  // Reset sentence history.
+  lastSentenceId = INVALID_SENTENCE_ID;
+
   // Attach a random assortment of button handlers.
   attachStandardButtonHandlers();
 }
@@ -414,7 +420,11 @@ static void loopStateRunning() {
       mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE; // Cool off any temperature rise.
     } else {
       // The rest of the time, we choose a random sentence from the mix.
-      sentenceId = random(sentences.size());
+      // We track the previously-shown sentence, and re-roll if we draw the same sentence 2x in a row.
+      do {
+        sentenceId = random(sentences.size());
+      } while (sentenceId == lastSentenceId);
+
       // But the temperature rises, making the main sentence a bit more likely next time around.
       mainSentenceTemperature += TEMPERATURE_INCREMENT;
       if (sentenceId == mainMsgId()) {
@@ -453,6 +463,10 @@ static void loopStateRunning() {
   // Start the new animation for the recommended amt of time.
   activeAnimation.setParameters(newSentence, newEffect, 0, 0);
   activeAnimation.start();
+
+  // Track the sentence id associated with the newly-started animation,
+  // so next time through we don't show it twice in a row (unless it's locked).
+  lastSentenceId = sentenceId;
 }
 
 void loop() {
