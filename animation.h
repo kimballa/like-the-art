@@ -53,6 +53,9 @@ inline constexpr uint32_t durationForFastBlinkCount(const uint32_t blinkCount) {
 
 // The EF_MELT animation will melt away one word every 'n' milliseconds configured here:
 constexpr unsigned int MELT_ONE_WORD_MILLIS = 250;
+constexpr unsigned int MELT_OPTIMAL_HOLD_TIME = 3000; // Optimal hold phase timing for EF_MELT.
+constexpr unsigned int MELT_MINIMUM_HOLD_TIME = 1000; // Enforce a min hold time this long.
+constexpr unsigned int MELT_BLANK_TIME = 1500; // Millis @ end of outro when sign is held blank.
 
 // The SLIDE_TO_END animation uses the following timing:
 constexpr unsigned int SLIDE_TO_END_PER_WORD_ZIP = 100; // a 'light zip' moves thru words at 1x / 100ms

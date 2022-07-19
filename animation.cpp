@@ -104,8 +104,8 @@ uint32_t Animation::getOptimalDuration(const Sentence &s, const Effect e, const 
         + SLIDE_TO_END_DEFAULT_SENTENCE_HOLD
         + (positionSum * SLIDE_TO_END_PER_WORD_ZIP + s.getNumWords() * SLIDE_TO_END_PER_WORD_HOLD);
   case EF_MELT:
-    // time for all words to melt plus 3s hold time
-    return MELT_ONE_WORD_MILLIS * NUM_SIGNS + 3000;
+    // time for all words to melt plus full-sign hold time plus blank outro hold time.
+    return MELT_ONE_WORD_MILLIS * NUM_SIGNS + MELT_OPTIMAL_HOLD_TIME + MELT_BLANK_TIME;
   default:
     DBGPRINTU("Unknown effect in getOptimalDuration():", (uint32_t)e);
     DBGPRINT("Returning default duration of 2000ms.");
@@ -272,19 +272,19 @@ void Animation::_setParamsMelt(const Sentence &s, const Effect e, uint32_t flags
   // real sentence. The sentence holds, and then individual words turn off
   // to fade to black for outro.
   numWordsToMelt = NUM_SIGNS - s.getNumWords();
-  if (NUM_SIGNS * MELT_ONE_WORD_MILLIS > milliseconds) {
+  uint32_t introTime = numWordsToMelt * MELT_ONE_WORD_MILLIS;
+  uint32_t outroTime = s.getNumWords() * MELT_ONE_WORD_MILLIS + MELT_BLANK_TIME;
+  if (introTime + outroTime + MELT_MINIMUM_HOLD_TIME >= milliseconds) {
     // This is going to be an over-length animation. Just do a quick hold.
-    holdPhaseTime = 1000;
+    holdPhaseTime = MELT_MINIMUM_HOLD_TIME;
   } else {
     // All time not spent melting is just in hold.
-    holdPhaseTime = milliseconds - (NUM_SIGNS * MELT_ONE_WORD_MILLIS);
+    holdPhaseTime = milliseconds - introTime - outroTime;
   }
 
-  _setupIntroHoldOutro(numWordsToMelt * MELT_ONE_WORD_MILLIS,
-                       holdPhaseTime,
-                       s.getNumWords() * MELT_ONE_WORD_MILLIS);
+  _setupIntroHoldOutro(introTime, holdPhaseTime, outroTime);
 
-  DBGPRINTU("New animation: EF_MELT", milliseconds);
+  DBGPRINTU("New animation: EF_MELT", introTime + holdPhaseTime + outroTime);
 }
 
 /**
@@ -745,6 +745,9 @@ void Animation::_nextMelt() {
       _nextMeltTime = _phaseRemainingMillis;
       _availableMeltSet = _sentence.getSignBits(); // We want to melt the sentence itself.
       _numWordsLeftToMelt = _sentence.getNumWords();
+    } else if (_phaseRemainingMillis < MELT_BLANK_TIME) {
+      // The last `MELT_BLANK_TIME` millis of the outro phase we just idle on a blank screen.
+      return;
     }
 
     if (_phaseRemainingMillis <= _nextMeltTime) {
