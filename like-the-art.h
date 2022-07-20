@@ -32,6 +32,9 @@ using namespace std;
 // Set this to be true for production, false for breadboard.
 constexpr bool IS_TARGET_PRODUCTION = true;
 
+// Is the WDT enabled to enforce reboots on a jam?
+constexpr bool WATCHDOG_ENABLED = true;
+
 // Set REPORT_ANALOG_DARK_SENSOR to true if you want the analog read value
 // of the DARK sensor (avg of AVG_NUM_DARK_SAMPLES readings) reported on
 // the debug console.
@@ -60,6 +63,10 @@ constexpr unsigned int MAIN_SENTENCE_MAX_TEMPERATURE = 1000;
 void lockEffect(const Effect e);
 /** "Lock in" the specified sentence for the next few seconds. */
 void lockSentence(const unsigned int sentenceId);
+
+/** Set animation parameters to use after current animation finishes. */
+void setOnDeckAnimationParams(unsigned int sentenceId, Effect ef, uint32_t flags);
+void clearOnDeckAnimationParams();
 
 // The top-level state machine of the system: it's either running, waiting for nightfall, or in
 // admin mode. Other state machines controlling LED signs, etc. are only valid in certain macro

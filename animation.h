@@ -20,20 +20,30 @@ enum Effect {
                      // real sentence. The sentence holds, and then individual words turn off
                      // to fade to black for outro.
 
-  EF_MAX_ENUM,       // Not a real Effect; serves to mark the highest-valued valid effect id
-                     // returned by randomEffect().
+  //// Special-purpose effects ////
+  // These cannot be returned by randomEffect(), they are triggered under specific conditions:
+  // user button presses; as a secondary chained animation registered "on deck"; etc.
 
-// TODO(aaron): These are effectively layered effects that should be possible to 'or' on top of
-// the preceeding effects.
-  EF_FRITZING_ART,   // Like GLOW, but the word "ART" zaps in and out randomly, like neon on the fritz.
-                     // Only valid for sentences with 'ART' in them.
-  EF_FRITZING_DONT,  // Like FRITZING_ART, but the word "DON'T" is what's zapping in and out.
-  EF_ALT_LOVE_HATE,  // Alternate lighting the "LOVE" and "HATE" words.
+  EF_ALL_BRIGHT,     // Disregard Sentence; entire sign illuminated a la EF_APPEAR.
+  EF_ALL_DARK,       // Disregard Sentence; entire sign just remains off.
+
+  EF_FADE_LOVE_HATE, // Fade across between lighting the "LOVE" and "HATE" words.
+
+  EF_NO_EFFECT,      // A do-nothing placeholder / "null" effect, to mark the end of the
+                     // enumeration. Not intended for direct use. Do not place new enumerations
+                     // below this one, as its used for counting purposes.
 };
+
+// The enum value representing the highest-numbered Effect that `randomEffect()` can return.
+constexpr Effect MAX_RANDOM_EFFECT_ID = EF_MELT;
+
+// The enum value representing the highest-numbered valid Effect.
+constexpr Effect MAX_EFFECT_ID = EF_NO_EFFECT;
+constexpr unsigned int NUM_EFFECTS = (unsigned int)(MAX_EFFECT_ID) + 1;
 
 /** Return a random Effect. */
 inline Effect randomEffect() {
-  return (Effect)random((uint32_t)EF_MAX_ENUM);
+  return (Effect)random((uint32_t)MAX_RANDOM_EFFECT_ID + 1);
 };
 
 /** Return random flags appropriate for this effect/sentence. */
@@ -42,7 +52,6 @@ extern uint32_t newAnimationFlags(Effect e, const Sentence &s);
 /** Print the name of the specified Effect enum to the debug console. */
 extern void debugPrintEffect(const Effect e);
 
-constexpr unsigned int NUM_EFFECTS = (unsigned int)(Effect::EF_ALT_LOVE_HATE) + 1;
 
 constexpr unsigned int BLINK_PHASE_MILLIS = 1000;
 constexpr unsigned int FAST_BLINK_PHASE_MILLIS = 250;
@@ -92,6 +101,13 @@ constexpr unsigned int BUILD_RANDOM_HOLD_DURATION = BUILD_RANDOM_HOLD_PHASES * B
 // Duration (millis) between lighting up or turning off words in EF_SNAKE.
 constexpr unsigned int SNAKE_WORD_DELAY = 750;
 
+constexpr unsigned int ALL_BRIGHT_MILLIS = 10000; // Turn the whole sign on for 10 seconds by default
+constexpr unsigned int ALL_DARK_MILLIS = 20000; // If the user presses an 'all dark' button, make them
+                                                // really think they turned the whole thing off.
+
+constexpr unsigned int FADE_LOVE_HATE_MILLIS = 12000;
+constexpr unsigned int FADE_LOVE_HATE_INTRO_MILLIS = 1000;
+constexpr unsigned int FADE_LOVE_HATE_OUTRO_MILLIS = 2000;
 
 constexpr uint32_t ANIM_FLAG_FLICKER_COUNT_1 = 0x1; // One word should be flickering.
 constexpr uint32_t ANIM_FLAG_FLICKER_COUNT_2 = 0x2; // Two words should be flickering.
@@ -102,11 +118,24 @@ constexpr uint32_t ANIM_FLAG_FLICKER_COUNT_3 = 0x4; // Three words should be fli
 // whole sentence visible.
 constexpr uint32_t ANIM_FLAG_FADE_LOVE_HATE = 0x8;
 
+// The whole sign should "glitch out" with all words flickering.
+constexpr uint32_t ANIM_FLAG_FULL_SIGN_GLITCH = 0x10;
+
 // In a random roll out of 1000, what's the likelihood of various numbers of signs flickering?
 constexpr unsigned int FLICKER_LIKELIHOOD_MAX = 1000;
 constexpr unsigned int FLICKER_LIKELIHOOD_1 = 120; // 1 sign: 12%
 constexpr unsigned int FLICKER_LIKELIHOOD_2 = 170; // 2 signs: 5%
 constexpr unsigned int FLICKER_LIKELIHOOD_3 = 190; // 3 signs: 2%
+
+
+// In a random roll out of 1000, define the likelihood of the word "LOVE" in a sentence fading
+// over to "HATE" (or vice versa).
+constexpr unsigned int LOVE_HATE_LIKELIHOOD_MAX = 1000;
+constexpr unsigned int LOVE_HATE_FADE_LIKELIHOOD = 650;
+
+// When in ANIM_FLAG_FULL_SIGN_GLITCH state, use a very high flicker threshold
+// so the signs are mostly off except when they randomly flick on briefly.
+constexpr unsigned int FULL_SIGN_GLITCH_FLICKER_THRESHOLD = 925;
 
 /**
  * An animation makes a sentence appear with a specified effect.
@@ -167,6 +196,10 @@ private:
   void _setParamsSnake(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
   void _setParamsSlide(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
   void _setParamsMelt(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsAllBright(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsAllDark(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsFadeLoveHate(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsNoEffect(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
 
   void _nextAppear();
   void _nextGlow();
@@ -178,6 +211,10 @@ private:
   void _nextSnake();
   void _nextSlide();
   void _nextMelt();
+  void _nextAllBright();
+  void _nextAllDark();
+  void _nextFadeLoveHate();
+  void _nextNoEffect();
 
   //// State to manage advancing frames & phases of the animation ////
   unsigned int _remainingTime; // millis.
@@ -220,6 +257,12 @@ private:
 
   // EF_BUILD_RANDOM
   uint8_t _buildRandomOrder[NUM_SIGNS]; // Order we light up signs in this animation.
+
+  // EF_FADE_LOVE_HATE
+  int _loveHateFadeLoveOnThreshold; // Prob. of rand chance (out of THRESHOLD_MAX) that 'LOVE' is lit.
+  int _loveHateFadeLoveOnDeltaPerTic; // Amount that threshold changes each frame.
+  int _loveHateFrozenFramesRemaining;
+  static constexpr int LOVE_HATE_FADE_THRESHOLD_MAX = 1000000;
 };
 
 extern Animation activeAnimation;

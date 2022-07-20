@@ -50,6 +50,23 @@ static unsigned int mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE;
 // The id of the previous sentence shown.
 static unsigned int lastSentenceId = INVALID_SENTENCE_ID;
 
+// The next Animation state to use after the current one is finished.
+// If onDeckSentenceId is INVALID_SENTENCE_ID or onDeckEffect is EF_NO_EFFECT,
+// these variables are disregarded.
+static unsigned int onDeckSentenceId = INVALID_SENTENCE_ID;
+static Effect onDeckEffect = EF_NO_EFFECT;
+static uint32_t onDeckFlags = 0;
+
+void setOnDeckAnimationParams(unsigned int sentenceId, Effect ef, uint32_t flags) {
+  onDeckSentenceId = sentenceId;
+  onDeckEffect = ef;
+  onDeckFlags = flags;
+}
+
+void clearOnDeckAnimationParams() {
+  setOnDeckAnimationParams(INVALID_SENTENCE_ID, EF_NO_EFFECT, 0);
+}
+
 // Neopixel intensity is increasing each tick if true.
 static bool isNeoPixelIncreasing = true;
 static constexpr float NEO_PIXEL_INCREMENT = 1.0f / 256.0f;
@@ -311,16 +328,18 @@ void setup() {
   // Runtime validation of our config: the number of button handler functions must match
   // the number of effects and sentences defined. Otherwise, we either left one out, or
   // something more dangerous, like defined a sentence button for an invalid sentence id.
-  if (numUserButtonFns() != EF_MAX_ENUM + sentences.size()) {
+  if (numUserButtonFns() != NUM_EFFECTS + sentences.size()) {
     DBGPRINTU("*** WARNING: User button handler function array has inconsistent size:", numUserButtonFns());
-    DBGPRINTU("  Effect enum count:", (unsigned int)EF_MAX_ENUM);
+    DBGPRINTU("  Effect enum count:", (unsigned int)NUM_EFFECTS);
     DBGPRINTU("  Sentence array length:", sentences.size());
-    DBGPRINTU("  Expected button handler array length:", (unsigned int)EF_MAX_ENUM + sentences.size());
+    DBGPRINTU("  Expected button handler array length:", (unsigned int)NUM_EFFECTS + sentences.size());
     DBGPRINTU("  Actual button handler array length:", numUserButtonFns());
   }
 
   // Set up WDT failsafe.
-  Watchdog.enable(WATCHDOG_TIMEOUT_MILLIS);
+  if constexpr (WATCHDOG_ENABLED) {
+    Watchdog.enable(WATCHDOG_TIMEOUT_MILLIS);
+  }
 }
 
 void setMacroStateRunning() {
@@ -401,38 +420,53 @@ static void loopStateRunning() {
   // Current animation is done. Need to choose a new one.
   Effect newEffect;
   unsigned int sentenceId;
+  uint32_t newFlags;
+  bool usedOnDeckState = false;
 
-  if (remainingLockedEffectMillis > 0) {
-    // Use the effect locked in by user.
-    newEffect = lockedEffect;
-  } else {
-    // Choose one at random.
-    newEffect = randomEffect();
-  }
+  if (onDeckSentenceId != INVALID_SENTENCE_ID && onDeckEffect != EF_NO_EFFECT) {
+    // We teed up a state 'on deck' for use after the last animation finished, as part of
+    // an animation chain. Its time has now come.
+    sentenceId = onDeckSentenceId;
+    newEffect = onDeckEffect;
+    newFlags = onDeckFlags;
 
-  if (remainingLockedSentenceMillis > 0) {
-    // Use the sentence locked in by user.
-    sentenceId = lockedSentenceId;
+    usedOnDeckState = true;
+
+    // Clear the on-deck state so it doesn't get used endlessly.
+    clearOnDeckAnimationParams();
   } else {
-    unsigned int curTemperature = random(MAIN_SENTENCE_MAX_TEMPERATURE);
-    if (curTemperature < mainSentenceTemperature) {
-      // Some percentage of the (unlocked) time (mainSentenceTemperature / MAX_TEMPERATURE),
-      // we choose the main message.
-      sentenceId = mainMsgId();
-      mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE; // Cool off any temperature rise.
+    if (remainingLockedEffectMillis > 0) {
+      // Use the effect locked in by user.
+      newEffect = lockedEffect;
     } else {
-      // The rest of the time, we choose a random sentence from the mix.
-      // We track the previously-shown sentence, and re-roll if we draw the same sentence 2x in a row.
-      do {
-        sentenceId = random(sentences.size());
-      } while (sentenceId == lastSentenceId);
+      // Choose one at random.
+      newEffect = randomEffect();
+    }
 
-      // But the temperature rises, making the main sentence a bit more likely next time around.
-      mainSentenceTemperature += TEMPERATURE_INCREMENT;
-      if (sentenceId == mainMsgId()) {
-        // ... Unless the random carousel sentence is actually the main message, in which case
-        // we reset the odds to the default temperature.
-        mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE;
+    if (remainingLockedSentenceMillis > 0) {
+      // Use the sentence locked in by user.
+      sentenceId = lockedSentenceId;
+    } else {
+      unsigned int curTemperature = random(MAIN_SENTENCE_MAX_TEMPERATURE);
+      if (curTemperature < mainSentenceTemperature) {
+        // Some percentage of the (unlocked) time (mainSentenceTemperature / MAX_TEMPERATURE),
+        // we choose the main message.
+        sentenceId = mainMsgId();
+        mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE; // Cool off any temperature rise.
+      } else {
+        // The rest of the time, we choose a random sentence from the mix.
+        // We track the previously-shown sentence, and re-roll if we draw the same sentence 2x in a row.
+        do {
+          sentenceId = random(sentences.size());
+        } while (sentenceId == lastSentenceId);
+
+        // But the temperature rises, making the main sentence a bit more likely next time around.
+        mainSentenceTemperature += TEMPERATURE_INCREMENT;
+        if (sentenceId == mainMsgId()) {
+          // ... Unless the random carousel sentence is actually the main message, in which case
+          // we reset the odds to the default temperature.
+          mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE;
+        }
       }
     }
   }
@@ -445,25 +479,22 @@ static void loopStateRunning() {
     sentenceId = mainMsgId();
   }
 
-  if (newEffect >= EF_MAX_ENUM) {
+  if (newEffect > MAX_EFFECT_ID) {
     DBGPRINTU("*** ERROR: Invalid effect id:", newEffect);
     DBGPRINT("(Resetting to default effect.)");
     newEffect = EF_APPEAR;
   }
 
   const Sentence &newSentence = sentences[sentenceId];
-  uint32_t newFlags = newAnimationFlags(newEffect, newSentence);
+
+  if (!usedOnDeckState) {
+    // Establish flags in response to newly-chosen effect & sentence.
+    newFlags = newAnimationFlags(newEffect, newSentence);
+  }
 
   DBGPRINT("Setting up new animation for sentence:");
   newSentence.toDbgPrint();
   debugPrintEffect(newEffect);
-  // TODO(aaron): Remove this DBGPRINTX from the main loop when not needed.
-  DBGPRINTX("Animation flags:", newFlags);
-
-// TODO(aaron): Remove this debug code.
-//Sentence s(0, random(16)); // light up some combo of the 4 LEDs we have.
-//Effect e = EF_SLIDE_TO_END;
-//Sentence s(0, 0xF); // light up first 4 LEDs.
 
   // Start the new animation for the recommended amt of time.
   activeAnimation.setParameters(newSentence, newEffect, newFlags, 0);
@@ -516,7 +547,7 @@ void lockEffect(const Effect e) {
   lockedEffect = e;
   remainingLockedEffectMillis = EFFECT_LOCK_MILLIS;
 
-  if ((unsigned int)lockedEffect >= (unsigned int)EF_MAX_ENUM) {
+  if ((unsigned int)lockedEffect > (unsigned int)MAX_EFFECT_ID) {
     DBGPRINTU("Invalid effect id for lock:", (unsigned int)lockedEffect);
     DBGPRINT("(Resetting to default effect.)");
     lockedEffect = EF_APPEAR;

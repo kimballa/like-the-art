@@ -203,6 +203,8 @@ EFFECT_BTN_FN(EF_BUILD_RANDOM);
 EFFECT_BTN_FN(EF_SNAKE);
 EFFECT_BTN_FN(EF_SLIDE_TO_END);
 EFFECT_BTN_FN(EF_MELT);
+EFFECT_BTN_FN(EF_ALL_BRIGHT);
+EFFECT_BTN_FN(EF_ALL_DARK);
 
 // Other buttons fix a particular sentence to be the active sentence for several seconds.
 // There are 18 sentences defined, and we have a separate handler method to invoke each.
@@ -244,6 +246,8 @@ static const buttonHandler_t userButtonFns[] = {
   EFFECT_BTN_NAME(EF_SNAKE),
   EFFECT_BTN_NAME(EF_SLIDE_TO_END),
   EFFECT_BTN_NAME(EF_MELT),
+  EFFECT_BTN_NAME(EF_ALL_BRIGHT),
+  EFFECT_BTN_NAME(EF_ALL_DARK),
 
   SENTENCE_BTN_NAME(0),
   SENTENCE_BTN_NAME(1),

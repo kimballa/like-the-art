@@ -2,43 +2,40 @@
 
 #include "like-the-art.h"
 
+// Helper macro to insert repetitive enum cases in debugPrintEffect().
+#define PRINT_EFFECT_NAME(e) case e: DBGPRINT(#e); break;
+
 void debugPrintEffect(const Effect e) {
   switch (e) {
-  case EF_APPEAR:
-    DBGPRINT("EF_APPEAR");
-    break;
-  case EF_GLOW:
-    DBGPRINT("EF_GLOW");
-    break;
-  case EF_BLINK:
-    DBGPRINT("EF_BLINK");
-    break;
-  case EF_BLINK_FAST:
-    DBGPRINT("EF_BLINK_FAST");
-    break;
-  case EF_ONE_AT_A_TIME:
-    DBGPRINT("EF_ONE_AT_A_TIME");
-    break;
-  case EF_BUILD:
-    DBGPRINT("EF_BUILD");
-    break;
-  case EF_BUILD_RANDOM:
-    DBGPRINT("EF_BUILD_RANDOM");
-    break;
-  case EF_SNAKE:
-    DBGPRINT("EF_SNAKE");
-    break;
-  case EF_SLIDE_TO_END:
-    DBGPRINT("EF_SLIDE_TO_END");
-    break;
-  case EF_MELT:
-    DBGPRINT("EF_MELT");
-    break;
+    PRINT_EFFECT_NAME(EF_APPEAR);
+    PRINT_EFFECT_NAME(EF_GLOW);
+    PRINT_EFFECT_NAME(EF_BLINK);
+    PRINT_EFFECT_NAME(EF_BLINK_FAST);
+    PRINT_EFFECT_NAME(EF_ONE_AT_A_TIME);
+    PRINT_EFFECT_NAME(EF_BUILD);
+    PRINT_EFFECT_NAME(EF_BUILD_RANDOM);
+    PRINT_EFFECT_NAME(EF_SNAKE);
+    PRINT_EFFECT_NAME(EF_SLIDE_TO_END);
+    PRINT_EFFECT_NAME(EF_MELT);
+
+    PRINT_EFFECT_NAME(EF_ALL_BRIGHT);
+    PRINT_EFFECT_NAME(EF_ALL_DARK);
+    PRINT_EFFECT_NAME(EF_FADE_LOVE_HATE);
+    PRINT_EFFECT_NAME(EF_NO_EFFECT);
   default:
     DBGPRINTU("Unknown effect id:", (unsigned int)e);
     break;
   }
 }
+
+// Return true if the specified effect ends with all words in the ON position.
+// (Technically, blinks could end in all-off state, but we can easily snap it back on
+// again without breaking the flow of the animation.)
+static bool effectEndsAllWordsOn(Effect e) {
+  return e == EF_APPEAR || e == EF_BLINK || e == EF_BLINK_FAST || e == EF_BUILD
+      || e == EF_BUILD_RANDOM;
+}
+
 
 /**
  * Generate a random assortment of animation flags that can be applied to the specified
@@ -57,7 +54,15 @@ uint32_t newAnimationFlags(Effect e, const Sentence &s) {
     flags |= ANIM_FLAG_FLICKER_COUNT_3; // 3 flickering signs.
   }
 
-  // TODO(aaron): Add roll for ANIM_FLAG_FADE_LOVE_HATE.
+  // Roll for ANIM_FLAG_FADE_LOVE_HATE, if eligible.
+  if ((s.getSignBits() & S_LOVE || s.getSignBits() & S_HATE)
+      && effectEndsAllWordsOn(e)
+      && random(LOVE_HATE_LIKELIHOOD_MAX) > LOVE_HATE_FADE_LIKELIHOOD ) {
+    // This sentence does include the word LOVE or HATE; the effect can be extended
+    // to include the fade, and we passed the random roll test. Fade from LOVE to HATE
+    // (or vice versa).
+    flags |= ANIM_FLAG_FADE_LOVE_HATE;
+  }
 
   return flags;
 }
@@ -127,6 +132,14 @@ uint32_t Animation::getOptimalDuration(const Sentence &s, const Effect e, const 
   case EF_MELT:
     // time for all words to melt plus full-sign hold time plus blank outro hold time.
     return MELT_ONE_WORD_MILLIS * NUM_SIGNS + MELT_OPTIMAL_HOLD_TIME + MELT_BLANK_TIME;
+  case EF_ALL_BRIGHT:
+    return ALL_BRIGHT_MILLIS;
+  case EF_ALL_DARK:
+    return ALL_DARK_MILLIS;
+  case EF_FADE_LOVE_HATE:
+    return FADE_LOVE_HATE_MILLIS;
+  case EF_NO_EFFECT:
+    return 0; // No-effect animation should not occupy any duration.
   default:
     DBGPRINTU("Unknown effect in getOptimalDuration():", (uint32_t)e);
     DBGPRINT("Returning default duration of 2000ms.");
@@ -308,6 +321,64 @@ void Animation::_setParamsMelt(const Sentence &s, const Effect e, uint32_t flags
   DBGPRINTU("New animation: EF_MELT", introTime + holdPhaseTime + outroTime);
 }
 
+void Animation::_setParamsAllBright(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+  _phaseDuration = milliseconds;
+  _phaseCountRemaining = 1;
+  DBGPRINTU("New animation: EF_ALL_BRIGHT", milliseconds);
+}
+
+void Animation::_setParamsAllDark(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+  _phaseDuration = milliseconds;
+  _phaseCountRemaining = 1;
+  DBGPRINTU("New animation: EF_ALL_DARK", milliseconds);
+}
+
+void Animation::_setParamsFadeLoveHate(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+
+  uint32_t introTime = FADE_LOVE_HATE_INTRO_MILLIS;
+  uint32_t outroTime = FADE_LOVE_HATE_OUTRO_MILLIS;
+  uint32_t mainTime = milliseconds - FADE_LOVE_HATE_INTRO_MILLIS - FADE_LOVE_HATE_OUTRO_MILLIS;
+
+  _setupIntroHoldOutro(introTime, mainTime, outroTime);
+
+  // Which direction are we going? If LOVE is part of the sentence, we go from lots of LOVE to lots
+  // of HATE; if HATE is part of the sentence -- do the opposite.
+  int loveDeltaDirection = (s.getSignBits() & S_LOVE) ? -1 : 1;
+  if (loveDeltaDirection < 0) {
+    // Decreasing % of LOVE over time b/c LOVE is part of the sign => start with LOVE at max.
+    _loveHateFadeLoveOnThreshold = LOVE_HATE_FADE_THRESHOLD_MAX;
+  } else {
+    _loveHateFadeLoveOnThreshold = 0;
+  }
+
+  // In the intro phase, LOVE (or HATE) is lit 100% of the time. In the outro phase, the reverse
+  // is true.
+  //
+  // During the main phase, the percentage of time LOVE is lit changes linearly over the animation
+  // from 100% to 0% (or vice versa). We start at THRESHOLD_MAX and go down to 0 linearly over the
+  // course of the 'milliseconds' animation length; the per-frame change is LoveOnDeltaPerTic.
+  _loveHateFadeLoveOnDeltaPerTic = loveDeltaDirection * LOVE_HATE_FADE_THRESHOLD_MAX *
+      (int)LOOP_MILLIS / (int)mainTime;
+
+  // The percentage of time HATE is lit is the exact opposite; exactly one of these two
+  // signs will be lit on every frame; so we don't need to track that separately.
+  DBGPRINTU("New animation: EF_FADE_LOVE_HATE", milliseconds);
+}
+
+void Animation::_setParamsNoEffect(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+
+  // Disregard 'milliseconds'; this effect is definitionally over before it begins.
+  _phaseCountRemaining = 0;
+  _phaseDuration = 0;
+
+  DBGPRINT("New animation: EF_NO_EFFECT (0 length)");
+}
+
+
 /** Pick a word within the sentence and configure it to flicker for this animation. */
 static void configureRandomFlickeringWord(const Sentence &s) {
   signs[s.getNthWord(random(s.getNumWords()) + 1)].setFlickerThreshold(
@@ -391,6 +462,18 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
   case EF_MELT:
     _setParamsMelt(s, e, flags, milliseconds);
     break;
+  case EF_ALL_BRIGHT:
+    _setParamsAllBright(s, e, flags, milliseconds);
+    break;
+  case EF_ALL_DARK:
+    _setParamsAllDark(s, e, flags, milliseconds);
+    break;
+  case EF_FADE_LOVE_HATE:
+    _setParamsFadeLoveHate(s, e, flags, milliseconds);
+    break;
+  case EF_NO_EFFECT:
+    _setParamsNoEffect(s, e, flags, milliseconds);
+    break;
   default:
     DBGPRINTU("Unknown effect id", (uint32_t)_effect);
     // Act like this was EF_APPEAR
@@ -399,8 +482,14 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
     break;
   }
 
+  if (_flags & ANIM_FLAG_FADE_LOVE_HATE) {
+    // We should run an EF_FADE_LOVE_HATE animation on the same sentence
+    // after this animation ends. Place that animation on deck.
+    setOnDeckAnimationParams(s.id(), EF_FADE_LOVE_HATE, 0);
+  }
+
   if (_phaseCountRemaining == 0) {
-    DBGPRINT("Warning: animation planner set up 0 phase count.");
+    DBGPRINT("*** WARNING: Animation planner set up 0 phase count.");
   }
 }
 
@@ -742,8 +831,6 @@ void Animation::_nextSlide() {
         DBGPRINT("Warning: no zip target @ beginning of EF_SLIDE outro phase; empty sentence?");
         _phaseRemainingMillis = 0; // Instant end to phase.
       }
-      // TODO(aaron): Does our timing assume we sit around on this word for one zip interval?
-      // Or do we instantly turn off this word and progress to the next zipPosition?
     }
 
     if (_phaseRemainingMillis <= _nextZipTime) {
@@ -800,6 +887,87 @@ void Animation::_nextMelt() {
       _meltWord();
     }
   }
+}
+
+void Animation::_nextAllBright() {
+  // Let there be light!
+  if (_isFirstPhaseTic) {
+    allSignsOn();
+    configMaxPwm();
+  }
+}
+
+void Animation::_nextAllDark() {
+  // Last one out, please turn out the lights.
+  if (_isFirstPhaseTic) {
+    allSignsOff();
+  }
+}
+
+void Animation::_nextFadeLoveHate() {
+  if (_curPhaseNum == PHASE_INTRO) {
+    if (_isFirstPhaseTic) {
+      // Start the animation by showing the sentence as-is "APPEAR" style.
+      _sentence.enableExclusively();
+      configMaxPwm();
+
+      _loveHateFrozenFramesRemaining = 0; // reset freeze counter @ start of animation.
+    }
+
+    return;
+  } else if (_curPhaseNum == PHASE_OUTRO) {
+    if (_isFirstPhaseTic) {
+      // Make sure the faded-to word is lit.
+      _sentence.enableExclusively();
+      if (_loveHateFadeLoveOnDeltaPerTic > 0) {
+        // Fading toward LOVE.
+        signs[IDX_LOVE].enable();
+        signs[IDX_HATE].disable();
+      } else {
+        // Fading toward HATE.
+        signs[IDX_HATE].enable();
+        signs[IDX_LOVE].disable();
+      }
+
+    }
+
+    return;
+  }
+
+  // If we get here, we are in the main/hold phase of the intro/hold/outro phases.
+
+  if (_loveHateFrozenFramesRemaining > 0) {
+    // We don't update every frame; we freeze for N frames after making an update.
+    // We're currently within a freeze. Update the probability change per tic but that's it.
+    _loveHateFrozenFramesRemaining--;
+    _loveHateFadeLoveOnThreshold += _loveHateFadeLoveOnDeltaPerTic;
+    return;
+  }
+
+  // On all other frames, we use a weighted probability to decide which of the "LOVE" and
+  // "HATE" signs to display.
+  //
+  // If the random number - in [0, THRESHOLD_MAX) - is less than LoveOnThreshold, turn on LOVE
+  // and turn off HATE. Otherwise, do the opposite.
+
+  int rnd = random(0, LOVE_HATE_FADE_THRESHOLD_MAX);
+  if (rnd < _loveHateFadeLoveOnThreshold) {
+    signs[IDX_LOVE].enable();
+    signs[IDX_HATE].disable();
+  } else {
+    signs[IDX_HATE].enable();
+    signs[IDX_LOVE].disable();
+  }
+
+  _loveHateFrozenFramesRemaining = 2;
+
+  // The probability changes by DeltaPerTic each frame.
+  _loveHateFadeLoveOnThreshold += _loveHateFadeLoveOnDeltaPerTic;
+}
+
+void Animation::_nextNoEffect() {
+  // Nothing to do. (We technically shouldn't even get in here, because setParams should
+  // have given us zero phases of animation.)
 }
 
 
@@ -875,6 +1043,18 @@ void Animation::next() {
     break;
   case EF_MELT:
     _nextMelt();
+    break;
+  case EF_ALL_BRIGHT:
+    _nextAllBright();
+    break;
+  case EF_ALL_DARK:
+    _nextAllDark();
+    break;
+  case EF_FADE_LOVE_HATE:
+    _nextFadeLoveHate();
+    break;
+  case EF_NO_EFFECT:
+    _nextNoEffect();
     break;
   default:
     // Shouldn't get here; setParameters() should have validated _effect.
