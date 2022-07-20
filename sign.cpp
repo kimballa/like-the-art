@@ -36,33 +36,78 @@ void GpioSignChannel::disable() {
 
 
 Sign::Sign(unsigned int id, const char *const word, SignChannel *channel):
-    _id(id), _word(std::move(word)), _channel(channel), _active(false) {
+    _id(id), _word(std::move(word)), _channel(channel),
+    _enabled(false), _active(false), _flickerThreshold(FLICKER_ALWAYS_ON) {
 
   channel->setup();
 }
 
 // Move constructor.
 Sign::Sign(Sign &&other):
-    _id(other._id), _word(other._word), _channel(other._channel) {
+    _id(other._id), _word(other._word), _channel(other._channel),
+    _enabled(other._enabled), _active(other._active), _flickerThreshold(other._flickerThreshold) {
   other._channel = NULL; // So its d'tor doesn't deallocate it.
 }
 
-void Sign::enable() {
-  //DBGPRINTU("Enable sign:", _id);
-  //DBGPRINT(_word);
+// Actually make sure the sign is on thru the sign channel.
+// Called by enable(), as well as flickerFrame() if flickering to on position.
+void Sign::_activate() {
   this->_channel->enable();
   this->_active = true;
   activeSignBits |= 1 << _id;
 }
 
-void Sign::disable() {
-  //DBGPRINTU("Disable sign:", _id);
-  //DBGPRINT(_word);
+// Actually make sure the sign is off thru the sign channel.
+// Called by disable(), as well as flickerFrame() if flickering to off position.
+void Sign::_deactivate() {
   if (NULL != this->_channel) {
     this->_channel->disable();
   }
   this->_active = false;
   activeSignBits &= ~(1 << _id);
+}
+
+void Sign::enable() {
+  //DBGPRINTU("Enable sign:", _id);
+  //DBGPRINT(_word);
+  this->_enabled = true;
+  this->_activate();
+}
+
+void Sign::disable() {
+  //DBGPRINTU("Disable sign:", _id);
+  //DBGPRINT(_word);
+  this->_enabled = false;
+  this->_deactivate();
+}
+
+// Flickering generates a random number 'r' between 0 and FLICKER_RANGE_MAX.
+// If r > threshold, the light is on (assuming its already enabled). Setting the
+// threshold to 0 (FLICKER_ALWAYS_ON) ensures it's always enabled.
+void Sign::flickerFrame() {
+  if (!this->_enabled) {
+    return; // Disabled signs do not flicker. They are shut off.
+  }
+
+  if (_flickerThreshold == FLICKER_ALWAYS_ON && !this->_active && this->_enabled) {
+    // This is for some reason not active, despite being enabled -- and we have
+    // disabled the flicker effect. Just activate it and leave. (Case can be hit if flicker threshold
+    // is updated while the sign is enabled but has flickered off.)
+    _activate();
+    return;
+  }
+
+  unsigned int flickerRand = random(FLICKER_RANGE_MAX);
+  if (flickerRand >= _flickerThreshold) {
+    // Sign should be active
+    if (!_active) {
+      // ... and it isn't. Switch that.
+      _activate();
+    }
+  } else if (_active) {
+    // Sign should be inactive... Yet, it is active. Switch that.
+    _deactivate();
+  }
 }
 
 Sign::~Sign() {

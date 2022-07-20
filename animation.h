@@ -36,6 +36,10 @@ inline Effect randomEffect() {
   return (Effect)random((uint32_t)EF_MAX_ENUM);
 };
 
+/** Return random flags appropriate for this effect/sentence. */
+extern uint32_t newAnimationFlags(Effect e, const Sentence &s);
+
+/** Print the name of the specified Effect enum to the debug console. */
 extern void debugPrintEffect(const Effect e);
 
 constexpr unsigned int NUM_EFFECTS = (unsigned int)(Effect::EF_ALT_LOVE_HATE) + 1;
@@ -87,6 +91,22 @@ constexpr unsigned int BUILD_RANDOM_HOLD_DURATION = BUILD_RANDOM_HOLD_PHASES * B
 
 // Duration (millis) between lighting up or turning off words in EF_SNAKE.
 constexpr unsigned int SNAKE_WORD_DELAY = 750;
+
+
+constexpr uint32_t ANIM_FLAG_FLICKER_COUNT_1 = 0x1; // One word should be flickering.
+constexpr uint32_t ANIM_FLAG_FLICKER_COUNT_2 = 0x2; // Two words should be flickering.
+constexpr uint32_t ANIM_FLAG_FLICKER_COUNT_3 = 0x4; // Three words should be flickering.
+
+// Flag indicates a post-animation fade-over from "LOVE" to "HATE" or vice versa.
+// Requires that LOVE or HATE be part of the sentence AND the Effect ends with the
+// whole sentence visible.
+constexpr uint32_t ANIM_FLAG_FADE_LOVE_HATE = 0x8;
+
+// In a random roll out of 1000, what's the likelihood of various numbers of signs flickering?
+constexpr unsigned int FLICKER_LIKELIHOOD_MAX = 1000;
+constexpr unsigned int FLICKER_LIKELIHOOD_1 = 120; // 1 sign: 12%
+constexpr unsigned int FLICKER_LIKELIHOOD_2 = 170; // 2 signs: 5%
+constexpr unsigned int FLICKER_LIKELIHOOD_3 = 190; // 3 signs: 2%
 
 /**
  * An animation makes a sentence appear with a specified effect.

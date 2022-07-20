@@ -40,6 +40,27 @@ void debugPrintEffect(const Effect e) {
   }
 }
 
+/**
+ * Generate a random assortment of animation flags that can be applied to the specified
+ * effect and sentence to change the visual impact.
+ */
+uint32_t newAnimationFlags(Effect e, const Sentence &s) {
+  uint32_t flags = 0;
+
+  // Roll the dice to see how many signs should flicker.
+  unsigned int flickerProbability = random(FLICKER_LIKELIHOOD_MAX);
+  if (flickerProbability < FLICKER_LIKELIHOOD_1) {
+    flags |= ANIM_FLAG_FLICKER_COUNT_1; // 1 flickering sign.
+  } else if (flickerProbability < FLICKER_LIKELIHOOD_2) {
+    flags |= ANIM_FLAG_FLICKER_COUNT_2; // 2 flickering signs.
+  } else if (flickerProbability < FLICKER_LIKELIHOOD_3) {
+    flags |= ANIM_FLAG_FLICKER_COUNT_3; // 3 flickering signs.
+  }
+
+  // TODO(aaron): Add roll for ANIM_FLAG_FADE_LOVE_HATE.
+
+  return flags;
+}
 
 Animation::Animation():
     _sentence(0, 0), _effect(EF_APPEAR), _flags(0), _remainingTime(0), _isRunning(false),
@@ -287,6 +308,12 @@ void Animation::_setParamsMelt(const Sentence &s, const Effect e, uint32_t flags
   DBGPRINTU("New animation: EF_MELT", introTime + holdPhaseTime + outroTime);
 }
 
+/** Pick a word within the sentence and configure it to flicker for this animation. */
+static void configureRandomFlickeringWord(const Sentence &s) {
+  signs[s.getNthWord(random(s.getNumWords()) + 1)].setFlickerThreshold(
+      random(FLICKER_ASSIGN_MIN, FLICKER_ASSIGN_MAX));
+}
+
 /**
  * Set the parameters for the next animation cycle. Based on the specified sentence, effect, and
  * duration, tees up the internal plan to execute the animation frames.
@@ -313,6 +340,25 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
   _sentence = s;
   _phaseCountRemaining = 0;
   _isIntroHoldOutro = false;
+
+  // Reset all flickering state to off.
+  for (unsigned int i = 0; i < NUM_SIGNS; i++) {
+    signs[i].setFlickerThreshold(FLICKER_ALWAYS_ON);
+  }
+
+  if (flags & ANIM_FLAG_FLICKER_COUNT_1) {
+    // Choose 1 word in the sentence to flicker.
+    configureRandomFlickeringWord(s);
+  } else if (flags & ANIM_FLAG_FLICKER_COUNT_2) {
+    // Choose two.
+    configureRandomFlickeringWord(s);
+    configureRandomFlickeringWord(s);
+  } else if (flags & ANIM_FLAG_FLICKER_COUNT_3) {
+    // Or tres.
+    configureRandomFlickeringWord(s);
+    configureRandomFlickeringWord(s);
+    configureRandomFlickeringWord(s);
+  }
 
   switch(_effect) {
   case EF_APPEAR:
@@ -841,6 +887,11 @@ void Animation::next() {
     // And kill this animation.
     stop();
     break;
+  }
+
+  // Update any flickering signs.
+  for (unsigned int i = 0; i < NUM_SIGNS; i++) {
+    signs[i].flickerFrame();
   }
 
   if (LOOP_MILLIS > _phaseRemainingMillis) {

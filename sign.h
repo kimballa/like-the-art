@@ -58,6 +58,15 @@ class NullSignChannel: public SignChannel {
   virtual void disable() {};
 };
 
+constexpr unsigned int FLICKER_RANGE_MAX = 1000;
+constexpr unsigned int FLICKER_ALWAYS_ON = 0;
+constexpr unsigned int FLICKER_ALWAYS_OFF = FLICKER_RANGE_MAX;
+
+// Sub-range within (ALWAYS_ON, RANGE_MAX] used when assigning flicker potential
+// to a sign determined to be flickering for the subsequent animation.
+constexpr unsigned int FLICKER_ASSIGN_MIN = 50;
+constexpr unsigned int FLICKER_ASSIGN_MAX = 300;
+
 /**
  * A Sign defines a single light-up sign. Signs are enabled or disabled through SignChannels.
  */
@@ -67,18 +76,34 @@ public:
   Sign(Sign &&other) noexcept;
   ~Sign();
 
-  void enable();
-  void disable();
-  bool isActive() const { return _active; };
-  const char *word() const { return _word; };
+  void enable(); // Turn the sign on (unless flickering switches it momentarily off)
+  void disable(); // Turn the sign off.
 
+  // Flickering generates a random number 'r' between 0 and FLICKER_RANGE_MAX.
+  // If r > threshold, the light is on (assuming its already enabled). Setting the
+  // threshold to 0 (FLICKER_ALWAYS_ON) ensures it's always enabled.
+  void setFlickerThreshold(unsigned int threshold) { _flickerThreshold = threshold; };
+  unsigned int getFlickerThreshold() const { return _flickerThreshold; };
+  void flickerFrame();
+
+  // If the sign was commanded to be on via enable.
+  bool isEnabled() const { return _enabled; };
+  // If the sign is actually supposed to be on (enabled and not flickered off).
+  bool isActive() const { return _active; };
+
+  const char *word() const { return _word; };
   unsigned int id() const { return _id; };
 
 private:
+  void _activate();
+  void _deactivate();
+
   const unsigned int _id;
   const char *const _word;
   SignChannel *_channel;
-  bool _active;
+  bool _enabled; // Whether this sign is nominally on
+  bool _active;  // Whether this sign is truly on (nominally on AND flicker is in 'on' state).
+  unsigned int _flickerThreshold;
 };
 
 #define I2CSC I2CSignChannel
@@ -98,6 +123,7 @@ extern "C" {
 }
 
 constexpr unsigned int NUM_SIGNS = 16;
+constexpr unsigned int INVALID_SIGN_ID = NUM_SIGNS + 1;
 
 // Bitfield-based one shot ids for each sign.
 constexpr unsigned int S_WHY = 1 << 0;
@@ -116,5 +142,23 @@ constexpr unsigned int S_THE = 1 << 12;
 constexpr unsigned int S_ART = 1 << 13;
 constexpr unsigned int S_BANG = 1 << 14;
 constexpr unsigned int S_QUESTION = 1 << 15;
+
+// Indexes of each word in the `signs` vector.
+constexpr unsigned int IDX_WHY      = 0;
+constexpr unsigned int IDX_DO       = 1;
+constexpr unsigned int IDX_YOU      = 2;
+constexpr unsigned int IDX_I        = 3;
+constexpr unsigned int IDX_DONT     = 4;
+constexpr unsigned int IDX_HAVE     = 5;
+constexpr unsigned int IDX_TO       = 6;
+constexpr unsigned int IDX_LOVE     = 7;
+constexpr unsigned int IDX_LIKE     = 8;
+constexpr unsigned int IDX_HATE     = 9;
+constexpr unsigned int IDX_BM       = 10;
+constexpr unsigned int IDX_ALL      = 11;
+constexpr unsigned int IDX_THE      = 12;
+constexpr unsigned int IDX_ART      = 13;
+constexpr unsigned int IDX_BANG     = 14;
+constexpr unsigned int IDX_QUESTION = 15;
 
 #endif /* _SIGN_H */

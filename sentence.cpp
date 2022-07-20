@@ -72,3 +72,19 @@ void Sentence::disable() {
   }
 }
 
+/** Return the sign id of the n'th word in the sentence. (n=1 for 'the first word') */
+unsigned int Sentence::getNthWord(unsigned int n) const {
+  unsigned int signsSeen = 0;
+
+  for (unsigned int i = 0; i < NUM_SIGNS; i++) {
+    if (_signs & (1 << i)) {
+      signsSeen++;
+      if (signsSeen == n) {
+        return i;
+      }
+    }
+  }
+
+  return INVALID_SIGN_ID;
+}
+

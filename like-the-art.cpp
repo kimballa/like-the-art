@@ -370,10 +370,12 @@ static inline void sleepLoopIncrement(unsigned long loopStartMicros) {
   unsigned long loopExecDuration = curMicros - loopStartMicros;
   if (loopExecDuration > LOOP_MICROS) {
     delayTime = 0; // The loop actually exceeded the target interval. No need to sleep.
+    DBGPRINTU("*** WARNING: Late loop iteration: microseconds =", loopExecDuration);
   } else {
     delayTime -= loopExecDuration; // Subtract loop runtime from total sleep.
   }
 
+  // DBGPRINTU("loop iteration time in microseconds =", loopExecDuration);
   if (delayTime > 0) {
     delayMicroseconds(delayTime);
   }
@@ -450,10 +452,13 @@ static void loopStateRunning() {
   }
 
   const Sentence &newSentence = sentences[sentenceId];
+  uint32_t newFlags = newAnimationFlags(newEffect, newSentence);
 
   DBGPRINT("Setting up new animation for sentence:");
   newSentence.toDbgPrint();
   debugPrintEffect(newEffect);
+  // TODO(aaron): Remove this DBGPRINTX from the main loop when not needed.
+  DBGPRINTX("Animation flags:", newFlags);
 
 // TODO(aaron): Remove this debug code.
 //Sentence s(0, random(16)); // light up some combo of the 4 LEDs we have.
@@ -461,7 +466,7 @@ static void loopStateRunning() {
 //Sentence s(0, 0xF); // light up first 4 LEDs.
 
   // Start the new animation for the recommended amt of time.
-  activeAnimation.setParameters(newSentence, newEffect, 0, 0);
+  activeAnimation.setParameters(newSentence, newEffect, newFlags, 0);
   activeAnimation.start();
 
   // Track the sentence id associated with the newly-started animation,

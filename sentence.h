@@ -15,6 +15,9 @@ public:
   /** Return the bit array representing the signs in the sentence. */
   unsigned int getSignBits() const { return _signs; };
 
+  /** Return the sign id of the n'th word in the sentence. (n=1 for 'the first word') */
+  unsigned int getNthWord(unsigned int n) const;
+
   /** Light up the sentence (simple "appear" effect) */
   void enable();
 
