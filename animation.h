@@ -131,7 +131,7 @@ constexpr unsigned int FLICKER_LIKELIHOOD_3 = 190; // 3 signs: 2%
 // In a random roll out of 1000, define the likelihood of the word "LOVE" in a sentence fading
 // over to "HATE" (or vice versa).
 constexpr unsigned int LOVE_HATE_LIKELIHOOD_MAX = 1000;
-constexpr unsigned int LOVE_HATE_FADE_LIKELIHOOD = 650;
+constexpr int LOVE_HATE_FADE_LIKELIHOOD = 650;
 
 // When in ANIM_FLAG_FULL_SIGN_GLITCH state, use a very high flicker threshold
 // so the signs are mostly off except when they randomly flick on briefly.
