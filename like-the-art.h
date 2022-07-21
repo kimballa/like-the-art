@@ -71,7 +71,7 @@ void clearOnDeckAnimationParams();
 // The top-level state machine of the system: it's either running, waiting for nightfall, or in
 // admin mode. Other state machines controlling LED signs, etc. are only valid in certain macro
 // states.
-enum MacroState {
+enum class MacroState: unsigned int {
   MS_RUNNING,       // Default "go" state
   MS_ADMIN,         // "Admin" mode entered for manual operator control.
   MS_WAITING,       // Waiting for nightfall; idle system.

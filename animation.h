@@ -3,7 +3,7 @@
 #ifndef _ANIMATION_H
 #define _ANIMATION_H
 
-enum Effect {
+enum Effect: unsigned int {
   EF_APPEAR,         // Just turn on the words and hold them there.
   EF_GLOW,           // Fade up from nothing, hold high, fade back to zero.
   EF_BLINK,          // Behold the cursed <blink> tag!

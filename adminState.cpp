@@ -439,7 +439,7 @@ void loopStateAdmin() {
 /** Switch to the MS_ADMIN MacroState. */
 void setMacroStateAdmin() {
   DBGPRINT(">>>> Entering ADMIN MacroState <<<<");
-  macroState = MS_ADMIN;
+  macroState = MacroState::MS_ADMIN;
 
   // Reset all Admin state to entry defaults
   currentEffect = 0;

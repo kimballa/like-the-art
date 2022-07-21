@@ -130,7 +130,7 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
 
   DBGPRINTU("Registered keypress:", btnId);
 
-  if (macroState == MS_ADMIN) {
+  if (macroState == MacroState::MS_ADMIN) {
     // Don't track the rolling history when we're already in admin mode;
     // we don't want to accidentally reset to the beginning of the admin mode
     // state machine if we're poking things deeper into the admin state machine
@@ -178,7 +178,7 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
 
   // If that reaches the scrambling threshold, mix up the assignments for
   // all the button handlers and reset the numButtonPresses counter.
-  if (numButtonPresses >= BUTTON_ROTATION_THRESHOLD && macroState == MS_RUNNING) {
+  if (numButtonPresses >= BUTTON_ROTATION_THRESHOLD && macroState == MacroState::MS_RUNNING) {
     DBGPRINTU("Reassigning button handlers because reached threshold", numButtonPresses);
     attachStandardButtonHandlers();
   }
@@ -187,7 +187,7 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
   // too fast and furious, display a special glitched-out effect that makes it look like
   // the sign broke >:)
   if ((uint8_t)(nextTimestampIdx - firstTimestampIdx) >= TIME_HISTORY_LENGTH
-      && macroState == MS_RUNNING) {
+      && macroState == MacroState::MS_RUNNING) {
 
     unsigned long olderTime = buttonPressTimeHistory[firstTimestampIdx];
     uint8_t recentTimeIdx = nextTimestampIdx - 1;

@@ -29,7 +29,7 @@ I2CParallel parallelBank0;
 I2CParallel parallelBank1;
 
 // Which top-level state machine to run in the main loop().
-MacroState macroState = MS_RUNNING;
+MacroState macroState = MacroState::MS_RUNNING;
 
 // State variables for an effect or sentence to lock in place during the main
 // MacroState, when commanded by a user button press.
@@ -93,13 +93,13 @@ static inline void updateNeoPixel() {
 
   neoPixel.clear();
   switch(macroState) {
-  case MS_RUNNING:
+  case MacroState::MS_RUNNING:
     neoPixel.setPixelColor(0, neoPixelColor(0, colorIntensity, 0)); // Green
     break;
-  case MS_ADMIN:
+  case MacroState::MS_ADMIN:
     neoPixel.setPixelColor(0, neoPixelColor(colorIntensity, 0, 0)); // Red
     break;
-  case MS_WAITING:
+  case MacroState::MS_WAITING:
     neoPixel.setPixelColor(0, neoPixelColor(0, 0, colorIntensity)); // Blue
     break;
   };
@@ -235,11 +235,11 @@ static bool pollDarkSensor() {
     debouncedDarkState = isDark;
   }
 
-  if (changeAllowed && isDark && macroState == MS_WAITING) {
+  if (changeAllowed && isDark && macroState == MacroState::MS_WAITING) {
     // Time to start the show.
     lastDarkStateChangeTime = now;
     setMacroStateRunning();
-  } else if (changeAllowed && !isDark && macroState == MS_RUNNING) {
+  } else if (changeAllowed && !isDark && macroState == MacroState::MS_RUNNING) {
     // The sun has found us; pack up for the day.
     lastDarkStateChangeTime = now;
     setMacroStateWaiting();
@@ -345,7 +345,7 @@ void setup() {
 void setMacroStateRunning() {
   DBGPRINT(">>>> Entering RUNNING MacroState <<<<");
 
-  macroState = MS_RUNNING;
+  macroState = MacroState::MS_RUNNING;
 
   // Clear locked effect/sentence.
   remainingLockedSentenceMillis = 0;
@@ -367,7 +367,7 @@ void setMacroStateRunning() {
 
 void setMacroStateWaiting() {
   DBGPRINT(">>>> Entering WAITING MacroState <<<<");
-  macroState = MS_WAITING;
+  macroState = MacroState::MS_WAITING;
   // Buttons can enter admin mode but do not change sign effect.
   attachWaitModeButtonHandlers();
   activeAnimation.stop();
@@ -404,6 +404,118 @@ static inline void sleepLoopIncrement(unsigned long loopStartMicros) {
   }
 }
 
+/**
+ * Checks the effect and sentence ids against bounds. If out-of-bounds, resets them to safe
+ * defaults.
+ */
+static void validateAnimationParams(Effect &newEffect, unsigned int &newSentenceId) {
+  if (newSentenceId >= sentences.size()) {
+    DBGPRINTU("*** ERROR: Invalid sentence id:", newSentenceId);
+    DBGPRINTU("Sentence array size is", sentences.size());
+    DBGPRINT("(Resetting to display default sentence.)");
+    newSentenceId = mainMsgId();
+  }
+
+  if (newEffect > MAX_EFFECT_ID) {
+    DBGPRINTU("*** ERROR: Invalid effect id:", newEffect);
+    DBGPRINT("(Resetting to default effect.)");
+    newEffect = EF_APPEAR;
+  }
+}
+
+/**
+ * Choose the next animation to run.
+ *
+ * Populates newEffect, newSentenceId, and newFlags with the parameters necessary to begin
+ * the animation.
+ *
+ * - If the "on deck" state is valid, this is used (sentence, effect, and flags), and the on deck
+ *   state is cleared.
+ * - If an effect or sentence id is locked, that locked element will be used. Unlocked
+ *   element(s) are selected by the normal algorithm that follows:
+ * - The sentence is either the main message, or a randomly-chosen sentence.
+ *   - The same sentence will not be chosen twice in a row.
+ *   - The main message is selected with a certain default probability ("temperature"). Each
+ *     sequential time it is not selected, the temperature for next time increases by 5%. Selecting
+ *     the main message resets the temperature cools back down to its default probability.
+ *   - If the main message is not selected, a sentence is chosen at random (equal weight) from the
+ *     sentence vocabulary.
+ * - The effect is chosen randomly.
+ * - Flags are applied randomly, after considering constraints of the selected sentence and effect.
+ *   Each possible flag has its own probability weighting.
+ */
+static void chooseNextAnimation(Effect &newEffect, unsigned int &newSentenceId, uint32_t &newFlags) {
+
+  if (onDeckSentenceId != INVALID_SENTENCE_ID && onDeckEffect != EF_NO_EFFECT) {
+    // We teed up a state 'on deck' for use after the last animation finished, as part of
+    // an animation chain. Its time has now come.
+    newSentenceId = onDeckSentenceId;
+    newEffect = onDeckEffect;
+    newFlags = onDeckFlags;
+
+    // Clear the on-deck state so it doesn't get used endlessly.
+    clearOnDeckAnimationParams();
+
+    // Validate on deck state and conform it if necessary.
+    validateAnimationParams(newEffect, newSentenceId);
+    return;
+  }
+
+  if (remainingLockedEffectMillis > 0) {
+    // Use the effect locked in by user.
+    newEffect = lockedEffect;
+  } else {
+    // Choose one at random.
+    newEffect = randomEffect();
+  }
+
+  if (remainingLockedSentenceMillis > 0) {
+    // Use the sentence locked in by user.
+    newSentenceId = lockedSentenceId;
+  } else {
+    unsigned int curTemperature = random(MAIN_SENTENCE_MAX_TEMPERATURE);
+    if (curTemperature < mainSentenceTemperature) {
+      // Some percentage of the (unlocked) time (mainSentenceTemperature / MAX_TEMPERATURE),
+      // we choose the main message.
+      newSentenceId = mainMsgId();
+      mainSentenceTemperature = 0; // Ensure main sentence is not selected twice in a row.
+    } else {
+      // The rest of the time, we choose a random sentence from the carousel.
+      // We track the previously-shown sentence, and re-roll if we draw the same sentence 2x in a row.
+      do {
+        newSentenceId = random(sentences.size());
+      } while (newSentenceId == lastSentenceId);
+
+      // But the temperature rises, making the main sentence a bit more likely next time around,
+      // *unless* the main sentence ran last time, in which case its temperature resets to default.
+      if (mainSentenceTemperature == 0) {
+        // We ran the main sentence last time, and its temperature was cooled all the way to zero
+        // to ensure that we didn't select it this round. Now we warm the temperature back up
+        // to its default value.
+        mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE; // Reset main sentence's odds.
+      } else {
+        // Subsequent incremental temperature rise.
+        mainSentenceTemperature += TEMPERATURE_INCREMENT;
+      }
+
+      if (newSentenceId == mainMsgId()) {
+        // ... Unless the random carousel sentence is actually the main message, in which case
+        // we reset the odds to zero, to ensure we don't select it next time in the top-level
+        // "temperature measurement" selector.
+        mainSentenceTemperature = 0;
+      }
+    }
+  }
+
+  // Paranoia: don't dereference an invalid sentence id or unknown effect.
+  validateAnimationParams(newEffect, newSentenceId);
+
+  const Sentence &newSentence = sentences[newSentenceId];
+
+  // Establish flags in response to newly-chosen effect & sentence.
+  newFlags = newAnimationFlags(newEffect, newSentence);
+}
+
 /** Main loop body when we're in the MS_RUNNING macro state. */
 static void loopStateRunning() {
 
@@ -423,78 +535,10 @@ static void loopStateRunning() {
 
   // Current animation is done. Need to choose a new one.
   Effect newEffect;
-  unsigned int sentenceId;
+  unsigned int newSentenceId;
   uint32_t newFlags;
-  bool usedOnDeckState = false;
-
-  if (onDeckSentenceId != INVALID_SENTENCE_ID && onDeckEffect != EF_NO_EFFECT) {
-    // We teed up a state 'on deck' for use after the last animation finished, as part of
-    // an animation chain. Its time has now come.
-    sentenceId = onDeckSentenceId;
-    newEffect = onDeckEffect;
-    newFlags = onDeckFlags;
-
-    usedOnDeckState = true;
-
-    // Clear the on-deck state so it doesn't get used endlessly.
-    clearOnDeckAnimationParams();
-  } else {
-    if (remainingLockedEffectMillis > 0) {
-      // Use the effect locked in by user.
-      newEffect = lockedEffect;
-    } else {
-      // Choose one at random.
-      newEffect = randomEffect();
-    }
-
-    if (remainingLockedSentenceMillis > 0) {
-      // Use the sentence locked in by user.
-      sentenceId = lockedSentenceId;
-    } else {
-      unsigned int curTemperature = random(MAIN_SENTENCE_MAX_TEMPERATURE);
-      if (curTemperature < mainSentenceTemperature) {
-        // Some percentage of the (unlocked) time (mainSentenceTemperature / MAX_TEMPERATURE),
-        // we choose the main message.
-        sentenceId = mainMsgId();
-        mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE; // Cool off any temperature rise.
-      } else {
-        // The rest of the time, we choose a random sentence from the mix.
-        // We track the previously-shown sentence, and re-roll if we draw the same sentence 2x in a row.
-        do {
-          sentenceId = random(sentences.size());
-        } while (sentenceId == lastSentenceId);
-
-        // But the temperature rises, making the main sentence a bit more likely next time around.
-        mainSentenceTemperature += TEMPERATURE_INCREMENT;
-        if (sentenceId == mainMsgId()) {
-          // ... Unless the random carousel sentence is actually the main message, in which case
-          // we reset the odds to the default temperature.
-          mainSentenceTemperature = MAIN_SENTENCE_BASE_TEMPERATURE;
-        }
-      }
-    }
-  }
-
-  // Paranoia: don't dereference an invalid sentence id or unknown effect.
-  if (sentenceId >= sentences.size()) {
-    DBGPRINTU("*** ERROR: Invalid sentence id:", sentenceId);
-    DBGPRINTU("Sentence array size is", sentences.size());
-    DBGPRINT("(Resetting to display default sentence.)");
-    sentenceId = mainMsgId();
-  }
-
-  if (newEffect > MAX_EFFECT_ID) {
-    DBGPRINTU("*** ERROR: Invalid effect id:", newEffect);
-    DBGPRINT("(Resetting to default effect.)");
-    newEffect = EF_APPEAR;
-  }
-
-  const Sentence &newSentence = sentences[sentenceId];
-
-  if (!usedOnDeckState) {
-    // Establish flags in response to newly-chosen effect & sentence.
-    newFlags = newAnimationFlags(newEffect, newSentence);
-  }
+  chooseNextAnimation(newEffect, newSentenceId, newFlags);
+  const Sentence &newSentence = sentences[newSentenceId]; // validity guaranteed by chooseNext().
 
   DBGPRINT("Setting up new animation for sentence:");
   newSentence.toDbgPrint();
@@ -506,7 +550,7 @@ static void loopStateRunning() {
 
   // Track the sentence id associated with the newly-started animation,
   // so next time through we don't show it twice in a row (unless it's locked).
-  lastSentenceId = sentenceId;
+  lastSentenceId = newSentenceId;
 }
 
 void loop() {
@@ -524,20 +568,20 @@ void loop() {
 
   // Run the macro-state-specific loop body.
   switch(macroState) {
-  case MS_RUNNING:
+  case MacroState::MS_RUNNING:
     loopStateRunning();
     break;
-  case MS_ADMIN:
+  case MacroState::MS_ADMIN:
     loopStateAdmin();
     break;
-  case MS_WAITING:
+  case MacroState::MS_WAITING:
     // Definitionally nothing to do in the waiting state...
     // TODO - instead of loops of short-sleep & polling the dark sensor every 10ms,
     // we should put the system into a lower-power mode and query every minute or so
     // or wait for an interrupt to wake us.
     break;
   default:
-    DBGPRINTI("*** ERROR: Unknown MacroState:", macroState);
+    DBGPRINTU("*** ERROR: Unknown MacroState:", (unsigned int)macroState);
     DBGPRINT("Reverting to running state");
     setMacroStateRunning();
   }
