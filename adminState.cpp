@@ -7,7 +7,7 @@ constexpr unsigned int EXIT_ADMIN_DEBOUNCE = 1000;
 constexpr unsigned int REBOOT_DEBOUNCE = 3000;
 
 // State machine describing where we are within the admin options.
-AdminState adminState = AS_MAIN_MENU;
+AdminState adminState = AdminState::AS_MAIN_MENU;
 
 // Forward declarations for remainder of compilation unit...
 static void attachAdminButtonHandlers();
@@ -43,7 +43,7 @@ bool isConfigDirty = false;
 
 /** "return to main menu" function. */
 static void initMainMenu() {
-  adminState = AS_MAIN_MENU;
+  adminState = AdminState::AS_MAIN_MENU;
   attachAdminButtonHandlers();
   activeAnimation.stop();
   allSignsOff();
@@ -57,7 +57,7 @@ static void initMainMenu() {
  */
 static void btnInOrderTest(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
-  adminState = AS_IN_ORDER_TEST;
+  adminState = AdminState::AS_IN_ORDER_TEST;
 
   allSignsOff();
   configMaxPwm();
@@ -73,7 +73,7 @@ static void btnInOrderTest(uint8_t btnId, uint8_t btnState) {
  */
 static void btnModeTestOneSign(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
-  adminState = AS_TEST_ONE_SIGN;
+  adminState = AdminState::AS_TEST_ONE_SIGN;
 
   attachEmptyButtonHandlers();
   buttons[3].setHandler(btnPrevSign);
@@ -97,7 +97,7 @@ static void btnModeTestOneSign(uint8_t btnId, uint8_t btnState) {
  */
 static void btnModeChangeEffect(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
-  adminState = AS_TEST_EACH_EFFECT;
+  adminState = AdminState::AS_TEST_EACH_EFFECT;
 
   attachEmptyButtonHandlers();
   buttons[3].setHandler(btnPrevEffect);
@@ -119,7 +119,7 @@ static void btnModeChangeEffect(uint8_t btnId, uint8_t btnState) {
  */
 static void btnModeTestEachSentence(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
-  adminState = AS_TEST_SENTENCE;
+  adminState = AdminState::AS_TEST_SENTENCE;
 
   attachEmptyButtonHandlers();
   buttons[3].setHandler(btnPrevSentence);
@@ -161,7 +161,7 @@ static void brightnessSelectAnimation() {
  */
 static void btnModeChooseBrightnessLevel(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
-  adminState = AS_CONFIG_BRIGHTNESS;
+  adminState = AdminState::AS_CONFIG_BRIGHTNESS;
 
   attachEmptyButtonHandlers();
   buttons[0].setHandler(btnBrightness0);
@@ -183,7 +183,7 @@ static void btnModeChooseBrightnessLevel(uint8_t btnId, uint8_t btnState) {
  */
 static void btnLightEntireBoard(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
-  adminState = AS_ALL_SIGNS_ON;
+  adminState = AdminState::AS_ALL_SIGNS_ON;
   activeAnimation.stop();
   configMaxPwm();
   allSignsOn();
@@ -197,7 +197,7 @@ static void btnLightEntireBoard(uint8_t btnId, uint8_t btnState) {
  */
 static void btnExitAdminMode(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_PRESSED) { return; }
-  adminState = AS_EXITING;
+  adminState = AdminState::AS_EXITING;
 
   activeAnimation.stop();
   allSignsOff();
@@ -217,7 +217,7 @@ static void btnExitAdminMode(uint8_t btnId, uint8_t btnState) {
  */
 static void btnCtrlAltDelete(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_PRESSED) { return; }
-  adminState = AS_REBOOTING;
+  adminState = AdminState::AS_REBOOTING;
 
   activeAnimation.stop();
   allSignsOff();
@@ -254,7 +254,7 @@ static void btnGoToMainMenu(uint8_t btnId, uint8_t btnState) {
   // the user to release all buttons first. In the meantime, null
   // out what the buttons do.
   attachEmptyButtonHandlers();
-  adminState = AS_WAIT_FOR_CLEAR_BTNS;
+  adminState = AdminState::AS_WAIT_FOR_CLEAR_BTNS;
 }
 
 ////////////// Button functions for TEST_ONE_SIGN ////////////////
@@ -359,7 +359,7 @@ static void btnBrightness3(uint8_t btnId, uint8_t btnState) {
 ////////////// Main admin state machine loop ////////////////
 
 void loopStateAdmin() {
-  if (adminState == AS_WAIT_FOR_CLEAR_BTNS) {
+  if (adminState == AdminState::AS_WAIT_FOR_CLEAR_BTNS) {
     // After we press a "return to main menu" button, wait for user to stop
     // pressing buttons before reassigning their capabilities.
     bool buttonsAreClear = true;
@@ -385,47 +385,47 @@ void loopStateAdmin() {
   // Any animation is complete/idle as we process state changes or other tasks here.
 
   switch (adminState) {
-  case AS_MAIN_MENU:
+  case AdminState::AS_MAIN_MENU:
     // First sign should blink slowly.
     activeAnimation.setParameters(Sentence(0, 1), EF_BLINK, 0, durationForBlinkCount(1));
     activeAnimation.start();
     break;
-  case AS_IN_ORDER_TEST:
+  case AdminState::AS_IN_ORDER_TEST:
     // Scroll through signs one-by-one for a second each.
     currentSign = (currentSign + 1) % signs.size();
     activeAnimation.setParameters(Sentence(0, 1 << currentSign), EF_APPEAR, 0, 1000);
     activeAnimation.start();
     break;
-  case AS_TEST_ONE_SIGN:
+  case AdminState::AS_TEST_ONE_SIGN:
     // One sign turned on @ configured brightness level on state entry.
     // Nothing to monitor in-state.
     break;
-  case AS_TEST_EACH_EFFECT:
-  case AS_TEST_SENTENCE:
+  case AdminState::AS_TEST_EACH_EFFECT:
+  case AdminState::AS_TEST_SENTENCE:
     // Show current selected sentence, apply configured effect.
     activeAnimation.setParameters(sentences[currentSentence], (Effect)currentEffect, 0, 0);
     activeAnimation.start();
     break;
-  case AS_CONFIG_BRIGHTNESS:
+  case AdminState::AS_CONFIG_BRIGHTNESS:
     // 1--4 signs slowly blink at current brightness level.
     brightnessSelectAnimation();
     break;
-  case AS_ALL_SIGNS_ON:
+  case AdminState::AS_ALL_SIGNS_ON:
     // All signs turned on @ configured brightness level on state entry.
     // Nothing to monitor in-state.
     break;
-  case AS_EXITING:
+  case AdminState::AS_EXITING:
     // First 3 signs flash 3 times. Once done, then we exit the admin state.
     // As we are done with the sign-off indicator -- actually exit.
     setMacroStateRunning();
     break;
-  case AS_REBOOTING:
+  case AdminState::AS_REBOOTING:
     // first 3 signs flash 5 times. When done, we do the reboot.
     // As we are done with the sign-off indicator -- actually reboot.
     DBGPRINT("*** REBOOTING SYSTEM ***");
     NVIC_SystemReset(); // Adios!
     break;
-  case AS_WAIT_FOR_CLEAR_BTNS:
+  case AdminState::AS_WAIT_FOR_CLEAR_BTNS:
     // Nothing further to do.
     break;
   default:

@@ -4,7 +4,7 @@
 #define _LTA_ADMIN_STATE_H
 
 /** State machine within the MS_ADMIN macro state. */
-enum AdminState: unsigned int {
+enum class AdminState: unsigned int {
   AS_MAIN_MENU,         // Waiting at main menu.
   AS_IN_ORDER_TEST,     // Testing each sign in series.
   AS_TEST_ONE_SIGN,     // Testing a single sign, user can cursor left/right.
