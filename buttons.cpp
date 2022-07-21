@@ -15,6 +15,15 @@ static uint8_t buttonHistory[MAX_PRESS_HISTORY]; // Circular rolling history buf
 static uint8_t firstPressIdx;
 static uint8_t nextPressIdx;
 
+// Record timestamps of recent button presses in rolling-history form.
+static constexpr uint8_t TIME_HISTORY_LENGTH = 5; // number of timestamps to track
+static constexpr uint8_t MAX_TIME_HISTORY = TIME_HISTORY_LENGTH + 1; // array size
+static unsigned long buttonPressTimeHistory[MAX_TIME_HISTORY];
+static uint8_t firstTimestampIdx;
+static uint8_t nextTimestampIdx;
+// If you press 5 buttons in 2s, something fun happens.
+static constexpr unsigned long TOO_FAST_THRESHOLD_MILLIS = 2000;
+static constexpr unsigned long TOO_FAST_LOCKOUT_MILLIS = 25000;
 
 // In the RUNNING state, every 'N' button presses... we randomize what all the buttons do.
 static constexpr uint8_t BUTTON_ROTATION_THRESHOLD = 25;
@@ -28,6 +37,12 @@ static void wipePasswordHistory() {
   nextPressIdx = 0;
   for (uint8_t i = 0; i < MAX_PRESS_HISTORY; i++) {
     buttonHistory[i] = 0;
+  }
+
+  firstTimestampIdx = 0;
+  nextTimestampIdx = 0;
+  for (uint8_t i = 0; i < MAX_TIME_HISTORY; i++) {
+    buttonPressTimeHistory[i] = 0;
   }
 }
 
@@ -73,6 +88,37 @@ void pollButtons() {
 }
 
 /**
+ * If the user presses TIME_HISTORY_LENGTH buttons in under TOO_FAST_THRESHOLD_MILLIS,
+ * perform a "glitched-out" response:
+ *
+ * - stop() the current animation
+ * - configure a new Animation of EF_ALL_BRIGHT with flags |= ANIM_FLAG_FULL_SIGN_GLITCH
+ * -- which sets all signs to flickerThreshold of 925
+ * -- and also sets up a length EF_ALL_DARK animation on-deck.
+ * - Disable buttons for 25 seconds
+ */
+static void buttonOverSpeedResponse() {
+  DBGPRINT("Button press frequency too high; display panic animation & cool off buttons");
+
+  // A sentence itself isn't shown by this animation, just need a placeholder for the arg.
+  const Sentence &dummySentence = sentences[mainMsgId()];
+
+  activeAnimation.stop();
+  activeAnimation.setParameters(dummySentence, EF_ALL_BRIGHT, ANIM_FLAG_FULL_SIGN_GLITCH_DARK, 0);
+  activeAnimation.start();
+
+  // Convert the button handlers to "wait mode" where they'll still count toward
+  // password entry but not fire further user-driven effects. The user's in "time
+  // out" for a while.
+  attachWaitModeButtonHandlers();
+
+  // Also queue up another "animation" of all-signs-off to follow on-deck after
+  // the glitching out finishes.
+  // At the end of this complete animation sequence, buttons should be restored.
+  setOnDeckAnimationParams(mainMsgId(), EF_ALL_DARK, ANIM_FLAG_RESET_BUTTONS_ON_END);
+}
+
+/**
  * Record a rolling history of the most recent button presses.
  * If the user has entered the sequence that enables admin mode, switch to that
  * macro state.
@@ -90,6 +136,13 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
     // state machine if we're poking things deeper into the admin state machine
     // in exactly the wrong way.
     return;
+  }
+
+  // Record the timestamp of the button press
+  buttonPressTimeHistory[nextTimestampIdx] = millis();
+  nextTimestampIdx = (nextTimestampIdx + 1) % MAX_TIME_HISTORY;
+  if (nextTimestampIdx == firstTimestampIdx) {
+    firstTimestampIdx = (firstTimestampIdx + 1) % MAX_TIME_HISTORY;
   }
 
   // Record the latest button press
@@ -117,15 +170,35 @@ static void recordButtonHistory(uint8_t btnId, uint8_t btnState=BTN_PRESSED) {
     // Switch to admin macro state.
     setMacroStateAdmin();
     wipePasswordHistory();
-  } else {
-    // Increment the number of buttons that we've seen pressed.
-    numButtonPresses++;
+    return; // Nothing further to do once we transfer to admin mode.
+  }
 
-    // If that reaches the scrambling threshold, mix up the assignments for
-    // all the button handlers and reset the numButtonPresses counter.
-    if (numButtonPresses >= BUTTON_ROTATION_THRESHOLD) {
-      DBGPRINTU("Reassigning button handlers because reached threshold", numButtonPresses);
-      attachStandardButtonHandlers();
+  // Increment the number of buttons that we've seen pressed.
+  numButtonPresses++;
+
+  // If that reaches the scrambling threshold, mix up the assignments for
+  // all the button handlers and reset the numButtonPresses counter.
+  if (numButtonPresses >= BUTTON_ROTATION_THRESHOLD && macroState == MS_RUNNING) {
+    DBGPRINTU("Reassigning button handlers because reached threshold", numButtonPresses);
+    attachStandardButtonHandlers();
+  }
+
+  // If we're in the RUNNING state (not WAITING), and the button presses are coming in
+  // too fast and furious, display a special glitched-out effect that makes it look like
+  // the sign broke >:)
+  if ((uint8_t)(nextTimestampIdx - firstTimestampIdx) >= TIME_HISTORY_LENGTH
+      && macroState == MS_RUNNING) {
+
+    unsigned long olderTime = buttonPressTimeHistory[firstTimestampIdx];
+    uint8_t recentTimeIdx = nextTimestampIdx - 1;
+    if (recentTimeIdx > MAX_TIME_HISTORY) {
+      recentTimeIdx = MAX_TIME_HISTORY - 1;
+    }
+    unsigned long newerTime = buttonPressTimeHistory[recentTimeIdx];
+
+    if (newerTime - olderTime <= TOO_FAST_THRESHOLD_MILLIS) {
+      // They've been jamming the buttons. Reward them with a surprise.
+      buttonOverSpeedResponse();
     }
   }
 }
@@ -326,6 +399,8 @@ void attachWaitModeButtonHandlers() {
     buttons[i].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
     buttons[i].setReleaseDebounceInterval(BTN_DEBOUNCE_MILLIS);
   }
+
+  numButtonPresses = 0;
 }
 
 /**

@@ -253,7 +253,7 @@ uint32_t getMaxPwmDutyCycle() {
   case BRIGHTNESS_POWER_SAVE_2: // 50%
     return freq / 2;
   default: // Unknown PWM frequency required... Just use 'normal' (70%)
-    DBGPRINT("Warning: invalid fieldConfig.maxBrightness; using normal/70%");
+    DBGPRINT("*** WARNING: invalid fieldConfig.maxBrightness; using normal/70%");
     return (freq * 70) / 100;
   }
 

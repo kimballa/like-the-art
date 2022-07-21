@@ -279,7 +279,7 @@ void setup() {
     // No field configuration initialized. Use defaults.
     int initConfigRet = initDefaultFieldConfig();
     if (initConfigRet != EEPROM_SUCCESS) {
-      DBGPRINTI("Warning: got error code when initializing field config:", initConfigRet);
+      DBGPRINTI("*** WARNING: got error code when initializing field config:", initConfigRet);
     }
   }
 
@@ -356,6 +356,10 @@ void setMacroStateRunning() {
 
   // Reset sentence history.
   lastSentenceId = INVALID_SENTENCE_ID;
+
+  // Reset any animation state.
+  activeAnimation.stop();
+  clearOnDeckAnimationParams();
 
   // Attach a random assortment of button handlers.
   attachStandardButtonHandlers();

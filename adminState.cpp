@@ -402,7 +402,7 @@ void loopStateAdmin() {
   case AS_TEST_EACH_EFFECT:
   case AS_TEST_SENTENCE:
     // Show current selected sentence, apply configured effect.
-    activeAnimation.setParameters(sentences[currentSentence], (Effect)currentEffect, 0, 5000);
+    activeAnimation.setParameters(sentences[currentSentence], (Effect)currentEffect, 0, 0);
     activeAnimation.start();
     break;
   case AS_CONFIG_BRIGHTNESS:

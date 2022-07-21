@@ -85,7 +85,7 @@ void printCurrentBrightness() {
     DBGPRINT("Brightness: Powersave 2 (50%)");
     break;
   default:
-    DBGPRINT("ERROR: unknown brightness level configured.");
+    DBGPRINT("*** ERROR: unknown brightness level configured.");
     break;
   }
 }

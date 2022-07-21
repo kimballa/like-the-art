@@ -52,6 +52,8 @@ uint32_t newAnimationFlags(Effect e, const Sentence &s) {
     flags |= ANIM_FLAG_FLICKER_COUNT_2; // 2 flickering signs.
   } else if (flickerProbability < FLICKER_LIKELIHOOD_3) {
     flags |= ANIM_FLAG_FLICKER_COUNT_3; // 3 flickering signs.
+  } else if (flickerProbability < FLICKER_LIKELIHOOD_ALL) {
+    flags |= ANIM_FLAG_FULL_SIGN_GLITCH_BRIGHT; // Entire board flickers.
   }
 
   // Roll for ANIM_FLAG_FADE_LOVE_HATE, if eligible.
@@ -396,7 +398,7 @@ static void configureRandomFlickeringWord(const Sentence &s) {
 void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds) {
   if (_isRunning) {
     // We continue to do what was asked of us, but let operator know last animation was incomplete.
-    DBGPRINT("Warning: Resetting animation parameters without finishing last animation");
+    DBGPRINT("*** WARNING: Resetting animation parameters without finishing last animation");
   }
 
   if (milliseconds == 0) {
@@ -429,6 +431,18 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
     configureRandomFlickeringWord(s);
     configureRandomFlickeringWord(s);
     configureRandomFlickeringWord(s);
+  }
+
+  if (flags & ANIM_FLAG_FULL_SIGN_GLITCH_DARK) {
+    // All signs should be set to flicker with a low duty cycle.
+    for (unsigned int i = 0; i < NUM_SIGNS; i++) {
+      signs[i].setFlickerThreshold(FULL_SIGN_GLITCH_FLICKER_DARK_THRESHOLD);
+    }
+  } else if (flags & ANIM_FLAG_FULL_SIGN_GLITCH_BRIGHT) {
+    // All signs should be set to flicker with a high duty cycle.
+    for (unsigned int i = 0; i < NUM_SIGNS; i++) {
+      signs[i].setFlickerThreshold(FULL_SIGN_GLITCH_FLICKER_BRIGHT_THRESHOLD);
+    }
   }
 
   switch(_effect) {
@@ -546,7 +560,7 @@ bool Animation::_slidePickNextZipTarget() {
 // Start the animation sequence.
 void Animation::start() {
   if (_phaseCountRemaining == 0) {
-    DBGPRINT("Warning: _phaseCountRemaining is 0 in start(); no animation to start.");
+    DBGPRINT("*** WARNING: _phaseCountRemaining is 0 in start(); no animation to start.");
     _isRunning = false;
     _phaseRemainingMillis = 0;
     _curPhaseNum = 0;
@@ -774,7 +788,7 @@ void Animation::_nextSlide() {
 
       if (!foundZipTarget) {
         // Shouldn't get here; it implies we lit an empty sentence?
-        DBGPRINT("Warning: no valid slide target sign id at start of intro phase");
+        DBGPRINT("*** WARNING: no valid slide target sign id at start of intro phase");
         _phaseRemainingMillis = 0; // Force progression to next phase.
         _slideCurTargetSignId = 0; // Set this to a valid value for paranoia's sake.
         return; // short-circuit and don't handle zip movement.
@@ -828,7 +842,7 @@ void Animation::_nextSlide() {
       foundZipTarget = _slidePickNextZipTarget();
       if (!foundZipTarget) {
         // Nothing to do?
-        DBGPRINT("Warning: no zip target @ beginning of EF_SLIDE outro phase; empty sentence?");
+        DBGPRINT("*** WARNING: no zip target @ beginning of EF_SLIDE outro phase; empty sentence?");
         _phaseRemainingMillis = 0; // Instant end to phase.
       }
     }
@@ -974,9 +988,13 @@ void Animation::_nextNoEffect() {
 // Perform the next step of animation.
 void Animation::next() {
   if (!_isRunning || _phaseCountRemaining == 0) {
-    DBGPRINT("Warning: Animation is not running; no work to do in next()");
+    DBGPRINT("*** WARNING: Animation is not running; no work to do in next()");
     // Somehow these variables got out-of-sync; ensure isRunning() returns false.
     _phaseCountRemaining = 0;
+    if (_flags & ANIM_FLAG_RESET_BUTTONS_ON_END) {
+      attachStandardButtonHandlers();
+      _flags &= ~ANIM_FLAG_RESET_BUTTONS_ON_END;
+    }
     _isRunning = false;
     return;
   }
@@ -1009,6 +1027,10 @@ void Animation::next() {
   if (_phaseCountRemaining == 0) {
     // We have finished the animation.
     _isRunning = false;
+    if (_flags & ANIM_FLAG_RESET_BUTTONS_ON_END) {
+      attachStandardButtonHandlers();
+      _flags &= ~ANIM_FLAG_RESET_BUTTONS_ON_END;
+    }
     return;
   }
 
@@ -1118,6 +1140,11 @@ void Animation::_meltWord() {
 
 // Halt the animation sequence even if there's part remaining.
 void Animation::stop() {
+  if (_flags & ANIM_FLAG_RESET_BUTTONS_ON_END) {
+    attachStandardButtonHandlers();
+    _flags &= ~ANIM_FLAG_RESET_BUTTONS_ON_END;
+  }
+
   _isRunning = false;
   _phaseCountRemaining = 0;
   _phaseRemainingMillis = 0;

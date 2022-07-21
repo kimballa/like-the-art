@@ -119,23 +119,28 @@ constexpr uint32_t ANIM_FLAG_FLICKER_COUNT_3 = 0x4; // Three words should be fli
 constexpr uint32_t ANIM_FLAG_FADE_LOVE_HATE = 0x8;
 
 // The whole sign should "glitch out" with all words flickering.
-constexpr uint32_t ANIM_FLAG_FULL_SIGN_GLITCH = 0x10;
+constexpr uint32_t ANIM_FLAG_FULL_SIGN_GLITCH_DARK = 0x10;
+constexpr uint32_t ANIM_FLAG_FULL_SIGN_GLITCH_BRIGHT = 0x20;
+// The buttons are remapped at the end of this animation.
+constexpr uint32_t ANIM_FLAG_RESET_BUTTONS_ON_END = 0x40;
 
 // In a random roll out of 1000, what's the likelihood of various numbers of signs flickering?
 constexpr unsigned int FLICKER_LIKELIHOOD_MAX = 1000;
 constexpr unsigned int FLICKER_LIKELIHOOD_1 = 120; // 1 sign: 12%
 constexpr unsigned int FLICKER_LIKELIHOOD_2 = 170; // 2 signs: 5%
 constexpr unsigned int FLICKER_LIKELIHOOD_3 = 190; // 3 signs: 2%
-
+constexpr unsigned int FLICKER_LIKELIHOOD_ALL = 200; // Entire msg board: 1%
 
 // In a random roll out of 1000, define the likelihood of the word "LOVE" in a sentence fading
 // over to "HATE" (or vice versa).
 constexpr unsigned int LOVE_HATE_LIKELIHOOD_MAX = 1000;
 constexpr int LOVE_HATE_FADE_LIKELIHOOD = 650;
 
-// When in ANIM_FLAG_FULL_SIGN_GLITCH state, use a very high flicker threshold
+// When in ANIM_FLAG_FULL_SIGN_GLITCH_DARK state, use a very high flicker threshold
 // so the signs are mostly off except when they randomly flick on briefly.
-constexpr unsigned int FULL_SIGN_GLITCH_FLICKER_THRESHOLD = 925;
+constexpr unsigned int FULL_SIGN_GLITCH_FLICKER_DARK_THRESHOLD = 925;
+// ... the same, for the GLITCH_LIGHT flag
+constexpr unsigned int FULL_SIGN_GLITCH_FLICKER_BRIGHT_THRESHOLD = 250;
 
 /**
  * An animation makes a sentence appear with a specified effect.
