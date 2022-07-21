@@ -54,7 +54,7 @@ static unsigned int lastSentenceId = INVALID_SENTENCE_ID;
 // If onDeckSentenceId is INVALID_SENTENCE_ID or onDeckEffect is EF_NO_EFFECT,
 // these variables are disregarded.
 static unsigned int onDeckSentenceId = INVALID_SENTENCE_ID;
-static Effect onDeckEffect = EF_NO_EFFECT;
+static Effect onDeckEffect = Effect::EF_NO_EFFECT;
 static uint32_t onDeckFlags = 0;
 
 void setOnDeckAnimationParams(unsigned int sentenceId, Effect ef, uint32_t flags) {
@@ -64,7 +64,7 @@ void setOnDeckAnimationParams(unsigned int sentenceId, Effect ef, uint32_t flags
 }
 
 void clearOnDeckAnimationParams() {
-  setOnDeckAnimationParams(INVALID_SENTENCE_ID, EF_NO_EFFECT, 0);
+  setOnDeckAnimationParams(INVALID_SENTENCE_ID, Effect::EF_NO_EFFECT, 0);
 }
 
 // Neopixel intensity is increasing each tick if true.
@@ -417,9 +417,9 @@ static void validateAnimationParams(Effect &newEffect, unsigned int &newSentence
   }
 
   if (newEffect > MAX_EFFECT_ID) {
-    DBGPRINTU("*** ERROR: Invalid effect id:", newEffect);
+    DBGPRINTU("*** ERROR: Invalid effect id:", (unsigned int)newEffect);
     DBGPRINT("(Resetting to default effect.)");
-    newEffect = EF_APPEAR;
+    newEffect = Effect::EF_APPEAR;
   }
 }
 
@@ -446,7 +446,7 @@ static void validateAnimationParams(Effect &newEffect, unsigned int &newSentence
  */
 static void chooseNextAnimation(Effect &newEffect, unsigned int &newSentenceId, uint32_t &newFlags) {
 
-  if (onDeckSentenceId != INVALID_SENTENCE_ID && onDeckEffect != EF_NO_EFFECT) {
+  if (onDeckSentenceId != INVALID_SENTENCE_ID && onDeckEffect != Effect::EF_NO_EFFECT) {
     // We teed up a state 'on deck' for use after the last animation finished, as part of
     // an animation chain. Its time has now come.
     newSentenceId = onDeckSentenceId;
@@ -598,7 +598,7 @@ void lockEffect(const Effect e) {
   if ((unsigned int)lockedEffect > (unsigned int)MAX_EFFECT_ID) {
     DBGPRINTU("Invalid effect id for lock:", (unsigned int)lockedEffect);
     DBGPRINT("(Resetting to default effect.)");
-    lockedEffect = EF_APPEAR;
+    lockedEffect = Effect::EF_APPEAR;
   }
 
   DBGPRINTU("Locked effect id:", (unsigned int)lockedEffect);

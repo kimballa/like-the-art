@@ -3,7 +3,7 @@
 #include "like-the-art.h"
 
 // Helper macro to insert repetitive enum cases in debugPrintEffect().
-#define PRINT_EFFECT_NAME(e) case e: DBGPRINT(#e); break;
+#define PRINT_EFFECT_NAME(e) case Effect::e: DBGPRINT(#e); break;
 
 void debugPrintEffect(const Effect e) {
   switch (e) {
@@ -32,8 +32,8 @@ void debugPrintEffect(const Effect e) {
 // (Technically, blinks could end in all-off state, but we can easily snap it back on
 // again without breaking the flow of the animation.)
 static bool effectEndsAllWordsOn(Effect e) {
-  return e == EF_APPEAR || e == EF_BLINK || e == EF_BLINK_FAST || e == EF_BUILD
-      || e == EF_BUILD_RANDOM;
+  return e == Effect::EF_APPEAR || e == Effect::EF_BLINK || e == Effect::EF_BLINK_FAST
+      || e == Effect::EF_BUILD || e == Effect::EF_BUILD_RANDOM;
 }
 
 
@@ -70,7 +70,7 @@ uint32_t newAnimationFlags(Effect e, const Sentence &s) {
 }
 
 Animation::Animation():
-    _sentence(0, 0), _effect(EF_APPEAR), _flags(0), _remainingTime(0), _isRunning(false),
+    _sentence(0, 0), _effect(Effect::EF_APPEAR), _flags(0), _remainingTime(0), _isRunning(false),
     _phaseDuration(0), _phaseRemainingMillis(0), _phaseCountRemaining(0)
     {
 }
@@ -94,28 +94,28 @@ uint32_t Animation::getOptimalDuration(const Sentence &s, const Effect e, const 
   uint32_t positionSum;
 
   switch(e) {
-  case EF_APPEAR:
+  case Effect::EF_APPEAR:
     return 5000;  // Show the sentence for 5 seconds.
-  case EF_GLOW:
+  case Effect::EF_GLOW:
     return 5000;  // 1250 ms glow-up, 2500ms hold, 1250 ms glow-down
-  case EF_BLINK:
+  case Effect::EF_BLINK:
     // approx 6 seconds total (1s on / 1s off x 3 blinks)
     return durationForBlinkCount(3);
-  case EF_BLINK_FAST:
+  case Effect::EF_BLINK_FAST:
     // approx 4 seconds total (250ms on / 250 ms off x 8 blinks)
     return durationForFastBlinkCount(8);
-  case EF_ONE_AT_A_TIME:
+  case Effect::EF_ONE_AT_A_TIME:
     // Show each word in sentence by itself for 1 second, followed by 'N' seconds of blank.
     return (s.getNumWords() + ONE_AT_A_TIME_BLANK_PHASES) * ONE_AT_A_TIME_WORD_DELAY;
-  case EF_BUILD:
+  case Effect::EF_BUILD:
     // words in sentence light up 1/2 sec apart, and it has a full-sentence hold phase at the end.
     return s.getNumWords() * BUILD_WORD_DELAY + BUILD_HOLD_DURATION;
-  case EF_BUILD_RANDOM:
+  case Effect::EF_BUILD_RANDOM:
     return s.getNumWords() * BUILD_RANDOM_WORD_DELAY + BUILD_RANDOM_HOLD_DURATION;
-  case EF_SNAKE:
+  case Effect::EF_SNAKE:
     // words in sentence light up and tear down 3/4 sec apart.
     return 2 * s.getNumWords() * SNAKE_WORD_DELAY;
-  case EF_SLIDE_TO_END:
+  case Effect::EF_SLIDE_TO_END:
     // Each word lights up by zipping through all preceeding words. (O(n^2) behavior.)
     // So the ids/positions of the words in the sentence give the proportion of time required
     // for each word -- plus a 'hold time' once we arrive at the word.
@@ -131,16 +131,16 @@ uint32_t Animation::getOptimalDuration(const Sentence &s, const Effect e, const 
     return (positionSum * SLIDE_TO_END_PER_WORD_ZIP + s.getNumWords() * SLIDE_TO_END_PER_WORD_HOLD)
         + SLIDE_TO_END_DEFAULT_SENTENCE_HOLD
         + (positionSum * SLIDE_TO_END_PER_WORD_ZIP + s.getNumWords() * SLIDE_TO_END_PER_WORD_HOLD);
-  case EF_MELT:
+  case Effect::EF_MELT:
     // time for all words to melt plus full-sign hold time plus blank outro hold time.
     return MELT_ONE_WORD_MILLIS * NUM_SIGNS + MELT_OPTIMAL_HOLD_TIME + MELT_BLANK_TIME;
-  case EF_ALL_BRIGHT:
+  case Effect::EF_ALL_BRIGHT:
     return ALL_BRIGHT_MILLIS;
-  case EF_ALL_DARK:
+  case Effect::EF_ALL_DARK:
     return ALL_DARK_MILLIS;
-  case EF_FADE_LOVE_HATE:
+  case Effect::EF_FADE_LOVE_HATE:
     return FADE_LOVE_HATE_MILLIS;
-  case EF_NO_EFFECT:
+  case Effect::EF_NO_EFFECT:
     return 0; // No-effect animation should not occupy any duration.
   default:
     DBGPRINTU("Unknown effect in getOptimalDuration():", (uint32_t)e);
@@ -446,52 +446,52 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
   }
 
   switch(_effect) {
-  case EF_APPEAR:
+  case Effect::EF_APPEAR:
     _setParamsAppear(s, e, flags, milliseconds);
     break;
-  case EF_GLOW:
+  case Effect::EF_GLOW:
     _setParamsGlow(s, e, flags, milliseconds);
     break;
-  case EF_BLINK:
+  case Effect::EF_BLINK:
     _setParamsBlink(s, e, flags, milliseconds);
     break;
-  case EF_BLINK_FAST:
+  case Effect::EF_BLINK_FAST:
     _setParamsBlinkFast(s, e, flags, milliseconds);
     break;
-  case EF_ONE_AT_A_TIME:
+  case Effect::EF_ONE_AT_A_TIME:
     _setParamsOneAtATime(s, e, flags, milliseconds);
     break;
-  case EF_BUILD:
+  case Effect::EF_BUILD:
     _setParamsBuild(s, e, flags, milliseconds);
     break;
-  case EF_BUILD_RANDOM:
+  case Effect::EF_BUILD_RANDOM:
     _setParamsBuildRandom(s, e, flags, milliseconds);
     break;
-  case EF_SNAKE:
+  case Effect::EF_SNAKE:
     _setParamsSnake(s, e, flags, milliseconds);
     break;
-  case EF_SLIDE_TO_END:
+  case Effect::EF_SLIDE_TO_END:
     _setParamsSlide(s, e, flags, milliseconds);
     break;
-  case EF_MELT:
+  case Effect::EF_MELT:
     _setParamsMelt(s, e, flags, milliseconds);
     break;
-  case EF_ALL_BRIGHT:
+  case Effect::EF_ALL_BRIGHT:
     _setParamsAllBright(s, e, flags, milliseconds);
     break;
-  case EF_ALL_DARK:
+  case Effect::EF_ALL_DARK:
     _setParamsAllDark(s, e, flags, milliseconds);
     break;
-  case EF_FADE_LOVE_HATE:
+  case Effect::EF_FADE_LOVE_HATE:
     _setParamsFadeLoveHate(s, e, flags, milliseconds);
     break;
-  case EF_NO_EFFECT:
+  case Effect::EF_NO_EFFECT:
     _setParamsNoEffect(s, e, flags, milliseconds);
     break;
   default:
     DBGPRINTU("Unknown effect id", (uint32_t)_effect);
     // Act like this was EF_APPEAR
-    _effect = EF_APPEAR;
+    _effect = Effect::EF_APPEAR;
     _setParamsAppear(s, _effect, flags, milliseconds);
     break;
   }
@@ -499,7 +499,7 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
   if (_flags & ANIM_FLAG_FADE_LOVE_HATE) {
     // We should run an EF_FADE_LOVE_HATE animation on the same sentence
     // after this animation ends. Place that animation on deck.
-    setOnDeckAnimationParams(s.id(), EF_FADE_LOVE_HATE, 0);
+    setOnDeckAnimationParams(s.id(), Effect::EF_FADE_LOVE_HATE, 0);
   }
 
   if (_phaseCountRemaining == 0) {
@@ -1036,52 +1036,52 @@ void Animation::next() {
 
   // Actually perform the appropriate frame advance action for the specified effect.
   switch(_effect) {
-  case EF_APPEAR:
+  case Effect::EF_APPEAR:
     _nextAppear();
     break;
-  case EF_GLOW:
+  case Effect::EF_GLOW:
     _nextGlow();
     break;
-  case EF_BLINK:
+  case Effect::EF_BLINK:
     _nextBlink();
     break;
-  case EF_BLINK_FAST:
+  case Effect::EF_BLINK_FAST:
     _nextBlinkFast();
     break;
-  case EF_ONE_AT_A_TIME:
+  case Effect::EF_ONE_AT_A_TIME:
     _nextOneAtATime();
     break;
-  case EF_BUILD:
+  case Effect::EF_BUILD:
     _nextBuild();
     break;
-  case EF_BUILD_RANDOM:
+  case Effect::EF_BUILD_RANDOM:
     _nextBuildRandom();
     break;
-  case EF_SNAKE:
+  case Effect::EF_SNAKE:
     _nextSnake();
     break;
-  case EF_SLIDE_TO_END:
+  case Effect::EF_SLIDE_TO_END:
     _nextSlide();
     break;
-  case EF_MELT:
+  case Effect::EF_MELT:
     _nextMelt();
     break;
-  case EF_ALL_BRIGHT:
+  case Effect::EF_ALL_BRIGHT:
     _nextAllBright();
     break;
-  case EF_ALL_DARK:
+  case Effect::EF_ALL_DARK:
     _nextAllDark();
     break;
-  case EF_FADE_LOVE_HATE:
+  case Effect::EF_FADE_LOVE_HATE:
     _nextFadeLoveHate();
     break;
-  case EF_NO_EFFECT:
+  case Effect::EF_NO_EFFECT:
     _nextNoEffect();
     break;
   default:
     // Shouldn't get here; setParameters() should have validated _effect.
     if (_isFirstPhaseTic) {
-      DBGPRINTU("Unknown effect id in next()?! _effect = ", (uint32_t)_effect);
+      DBGPRINTU("*** ERROR: Unknown effect id in next()?! _effect = ", (uint32_t)_effect);
     }
     // Just reset to EF_APPEAR state.
     _sentence.enableExclusively();

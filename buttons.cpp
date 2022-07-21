@@ -104,7 +104,8 @@ static void buttonOverSpeedResponse() {
   const Sentence &dummySentence = sentences[mainMsgId()];
 
   activeAnimation.stop();
-  activeAnimation.setParameters(dummySentence, EF_ALL_BRIGHT, ANIM_FLAG_FULL_SIGN_GLITCH_DARK, 0);
+  activeAnimation.setParameters(dummySentence, Effect::EF_ALL_BRIGHT,
+      ANIM_FLAG_FULL_SIGN_GLITCH_DARK, 0);
   activeAnimation.start();
 
   // Convert the button handlers to "wait mode" where they'll still count toward
@@ -115,7 +116,7 @@ static void buttonOverSpeedResponse() {
   // Also queue up another "animation" of all-signs-off to follow on-deck after
   // the glitching out finishes.
   // At the end of this complete animation sequence, buttons should be restored.
-  setOnDeckAnimationParams(mainMsgId(), EF_ALL_DARK, ANIM_FLAG_RESET_BUTTONS_ON_END);
+  setOnDeckAnimationParams(mainMsgId(), Effect::EF_ALL_DARK, ANIM_FLAG_RESET_BUTTONS_ON_END);
 }
 
 /**
@@ -263,7 +264,7 @@ bool Button::update(uint8_t latestPoll) {
 #define EFFECT_BTN_FN(effect_enum) \
   extern "C" void EFFECT_BTN_NAME(effect_enum) (uint8_t btnId, uint8_t btnState) { \
     recordButtonHistory(btnId, btnState); \
-    lockEffect(effect_enum); \
+    lockEffect(Effect::effect_enum); \
   }
 
 EFFECT_BTN_FN(EF_APPEAR);

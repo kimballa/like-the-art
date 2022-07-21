@@ -3,7 +3,7 @@
 #ifndef _ANIMATION_H
 #define _ANIMATION_H
 
-enum Effect: unsigned int {
+enum class Effect: unsigned int {
   EF_APPEAR,         // Just turn on the words and hold them there.
   EF_GLOW,           // Fade up from nothing, hold high, fade back to zero.
   EF_BLINK,          // Behold the cursed <blink> tag!
@@ -35,10 +35,10 @@ enum Effect: unsigned int {
 };
 
 // The enum value representing the highest-numbered Effect that `randomEffect()` can return.
-constexpr Effect MAX_RANDOM_EFFECT_ID = EF_MELT;
+constexpr Effect MAX_RANDOM_EFFECT_ID = Effect::EF_MELT;
 
 // The enum value representing the highest-numbered valid Effect.
-constexpr Effect MAX_EFFECT_ID = EF_NO_EFFECT;
+constexpr Effect MAX_EFFECT_ID = Effect::EF_NO_EFFECT;
 constexpr unsigned int NUM_EFFECTS = (unsigned int)(MAX_EFFECT_ID) + 1;
 
 /** Return a random Effect. */

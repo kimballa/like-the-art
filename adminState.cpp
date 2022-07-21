@@ -62,7 +62,7 @@ static void btnInOrderTest(uint8_t btnId, uint8_t btnState) {
   allSignsOff();
   configMaxPwm();
   currentSign = 0;
-  activeAnimation.setParameters(Sentence(0, 1 << currentSign), EF_APPEAR, 0, 1000);
+  activeAnimation.setParameters(Sentence(0, 1 << currentSign), Effect::EF_APPEAR, 0, 1000);
   activeAnimation.start();
   DBGPRINT("Performing in-order sign test");
 }
@@ -145,7 +145,7 @@ static void brightnessSelectAnimation() {
   // Turn on 1--4 signs at this pwm.
   // The BRIGHTNESS_xyz enums are actually coded as 1 to 4 full bits, so we can
   // use that value directly as the "sentence" bitmask to display.
-  activeAnimation.setParameters(Sentence(0, fieldConfig.maxBrightness), EF_BLINK, 0,
+  activeAnimation.setParameters(Sentence(0, fieldConfig.maxBrightness), Effect::EF_BLINK, 0,
       durationForBlinkCount(1));
   activeAnimation.start();
 }
@@ -205,7 +205,8 @@ static void btnExitAdminMode(uint8_t btnId, uint8_t btnState) {
   if (isConfigDirty) {
     saveFieldConfig(&fieldConfig);
   }
-  activeAnimation.setParameters(Sentence(0, 0x7), EF_BLINK_FAST, 0, durationForFastBlinkCount(3));
+  activeAnimation.setParameters(Sentence(0, 0x7), Effect::EF_BLINK_FAST, 0,
+      durationForFastBlinkCount(3));
   activeAnimation.start();
   DBGPRINT("Exiting admin menu...");
 }
@@ -227,7 +228,8 @@ static void btnCtrlAltDelete(uint8_t btnId, uint8_t btnState) {
   }
 
   // Set up blinking animation before we reboot.
-  activeAnimation.setParameters(Sentence(0, 0x7), EF_BLINK_FAST, 0, durationForFastBlinkCount(5));
+  activeAnimation.setParameters(Sentence(0, 0x7), Effect::EF_BLINK_FAST, 0,
+      durationForFastBlinkCount(5));
   activeAnimation.start();
   DBGPRINT("User requested reboot");
 }
@@ -387,13 +389,13 @@ void loopStateAdmin() {
   switch (adminState) {
   case AdminState::AS_MAIN_MENU:
     // First sign should blink slowly.
-    activeAnimation.setParameters(Sentence(0, 1), EF_BLINK, 0, durationForBlinkCount(1));
+    activeAnimation.setParameters(Sentence(0, 1), Effect::EF_BLINK, 0, durationForBlinkCount(1));
     activeAnimation.start();
     break;
   case AdminState::AS_IN_ORDER_TEST:
     // Scroll through signs one-by-one for a second each.
     currentSign = (currentSign + 1) % signs.size();
-    activeAnimation.setParameters(Sentence(0, 1 << currentSign), EF_APPEAR, 0, 1000);
+    activeAnimation.setParameters(Sentence(0, 1 << currentSign), Effect::EF_APPEAR, 0, 1000);
     activeAnimation.start();
     break;
   case AdminState::AS_TEST_ONE_SIGN:
