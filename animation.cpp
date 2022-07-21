@@ -9,6 +9,7 @@ void debugPrintEffect(const Effect e) {
   switch (e) {
     PRINT_EFFECT_NAME(EF_APPEAR);
     PRINT_EFFECT_NAME(EF_GLOW);
+    PRINT_EFFECT_NAME(EF_FLICKER);
     PRINT_EFFECT_NAME(EF_BLINK);
     PRINT_EFFECT_NAME(EF_BLINK_FAST);
     PRINT_EFFECT_NAME(EF_ONE_AT_A_TIME);
@@ -33,7 +34,7 @@ void debugPrintEffect(const Effect e) {
 // again without breaking the flow of the animation.)
 static bool effectEndsAllWordsOn(Effect e) {
   return e == EF_APPEAR || e == EF_BLINK || e == EF_BLINK_FAST || e == EF_BUILD
-      || e == EF_BUILD_RANDOM;
+      || e == EF_BUILD_RANDOM || e == EF_FLICKER;
 }
 
 
@@ -98,6 +99,8 @@ uint32_t Animation::getOptimalDuration(const Sentence &s, const Effect e, const 
     return 5000;  // Show the sentence for 5 seconds.
   case EF_GLOW:
     return 5000;  // 1250 ms glow-up, 2500ms hold, 1250 ms glow-down
+  case EF_FLICKER:
+    return FULL_FLICKER_INTRO_PHASE_MILLIS + FULL_FLICKER_HOLD_PHASE_MILLIS;
   case EF_BLINK:
     // approx 6 seconds total (1s on / 1s off x 3 blinks)
     return durationForBlinkCount(3);
@@ -172,6 +175,19 @@ void Animation::_setParamsGlow(const Sentence &s, const Effect e, uint32_t flags
   _glowStepSize = getMaxPwmDutyCycle() / framesPerPhase;
   _glowCurrentBrightness = 0;
   DBGPRINTU("New animation: EF_GLOW", milliseconds);
+}
+
+void Animation::_setParamsFlicker(const Sentence &s, const Effect e, uint32_t flags,
+    uint32_t milliseconds) {
+
+  // TODO(aaron): This doesn't actually respect the milliseconds arg; it just uses hardcoded timing.
+  milliseconds = FULL_FLICKER_INTRO_PHASE_MILLIS + FULL_FLICKER_HOLD_PHASE_MILLIS;
+
+  _setupIntroHoldOutro(FULL_FLICKER_INTRO_PHASE_MILLIS, FULL_FLICKER_HOLD_PHASE_MILLIS, 0);
+  _flickerChangePerTic = ((int)(FULL_FLICKER_END_DUTY_CYCLE - FULL_FLICKER_START_DUTY_CYCLE))
+      * (int)LOOP_MILLIS / (int)FULL_FLICKER_INTRO_PHASE_MILLIS;
+
+  DBGPRINTU("New animation: EF_FLICKER", milliseconds);
 }
 
 void Animation::_setParamsBlink(const Sentence &s, const Effect e, uint32_t flags,
@@ -452,6 +468,9 @@ void Animation::setParameters(const Sentence &s, const Effect e, uint32_t flags,
   case EF_GLOW:
     _setParamsGlow(s, e, flags, milliseconds);
     break;
+  case EF_FLICKER:
+    _setParamsFlicker(s, e, flags, milliseconds);
+    break;
   case EF_BLINK:
     _setParamsBlink(s, e, flags, milliseconds);
     break;
@@ -616,6 +635,35 @@ void Animation::_nextGlow() {
     // Not first frame of phase and we are in last phase (fade out)
     _glowCurrentBrightness -= _glowStepSize;
     pwmTimer.setDutyCycle(_glowCurrentBrightness);
+  }
+}
+
+void Animation::_nextFlicker() {
+  if (_isFirstPhaseTic) {
+    _sentence.enable();
+    configMaxPwm();
+
+    if (_curPhaseNum == PHASE_INTRO) {
+      // Configure all signs to flicker at the (mostly-off) starting duty cycle.
+      _flickerDutyCycle = FULL_FLICKER_START_DUTY_CYCLE;
+      for (int i = 0; i < NUM_SIGNS; i++) {
+        signs[i].setFlickerThreshold(_flickerDutyCycle);
+      }
+    } else if (_curPhaseNum == PHASE_HOLD) {
+      // Second phase is fully glow'd up and holding steady here.
+      for (int i = 0; i < NUM_SIGNS; i++) {
+        signs[i].setFlickerThreshold(FLICKER_ALWAYS_ON);
+      }
+    } else if (_curPhaseNum == PHASE_OUTRO) {
+      // There is no outro phase, it's zero-len.
+    }
+  } else if (_curPhaseNum == PHASE_INTRO) {
+    // It's the INTRO phase and not the first tic.
+    // Adjust the flicker duty cycle.
+    _flickerDutyCycle += _flickerChangePerTic;
+    for (int i = 0; i < NUM_SIGNS; i++) {
+      signs[i].setFlickerThreshold(_flickerDutyCycle);
+    }
   }
 }
 
@@ -1041,6 +1089,9 @@ void Animation::next() {
     break;
   case EF_GLOW:
     _nextGlow();
+    break;
+  case EF_FLICKER:
+    _nextFlicker();
     break;
   case EF_BLINK:
     _nextBlink();

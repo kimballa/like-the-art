@@ -6,6 +6,8 @@
 enum Effect {
   EF_APPEAR,         // Just turn on the words and hold them there.
   EF_GLOW,           // Fade up from nothing, hold high, fade back to zero.
+  EF_FLICKER,        // Whole sign fades up from nothing with "flickering neon" effects
+                     // rather than by ramping the PWM glow.
   EF_BLINK,          // Behold the cursed <blink> tag!
   EF_BLINK_FAST,
   EF_ONE_AT_A_TIME,  // Highlight each word in series, turning off word n before showing n+1.
@@ -142,6 +144,12 @@ constexpr unsigned int FULL_SIGN_GLITCH_FLICKER_DARK_THRESHOLD = 925;
 // ... the same, for the GLITCH_LIGHT flag
 constexpr unsigned int FULL_SIGN_GLITCH_FLICKER_BRIGHT_THRESHOLD = 250;
 
+constexpr unsigned int FULL_FLICKER_START_DUTY_CYCLE = 750;
+constexpr unsigned int FULL_FLICKER_END_DUTY_CYCLE = 50;
+constexpr unsigned int FULL_FLICKER_INTRO_PHASE_MILLIS = 7000;
+constexpr unsigned int FULL_FLICKER_HOLD_PHASE_MILLIS = 1500;
+
+
 /**
  * An animation makes a sentence appear with a specified effect.
  *
@@ -193,6 +201,7 @@ private:
 
   void _setParamsAppear(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
   void _setParamsGlow(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
+  void _setParamsFlicker(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
   void _setParamsBlink(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
   void _setParamsBlinkFast(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
   void _setParamsOneAtATime(const Sentence &s, const Effect e, uint32_t flags, uint32_t milliseconds);
@@ -208,6 +217,7 @@ private:
 
   void _nextAppear();
   void _nextGlow();
+  void _nextFlicker();
   void _nextBlink();
   void _nextBlinkFast();
   void _nextOneAtATime();
@@ -268,6 +278,10 @@ private:
   int _loveHateFadeLoveOnDeltaPerTic; // Amount that threshold changes each frame.
   int _loveHateFrozenFramesRemaining;
   static constexpr int LOVE_HATE_FADE_THRESHOLD_MAX = 1000000;
+
+  // EF_FLICKER
+  int _flickerChangePerTic;
+  unsigned int _flickerDutyCycle;
 };
 
 extern Animation activeAnimation;
