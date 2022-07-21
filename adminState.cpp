@@ -299,6 +299,7 @@ static void btnNextEffect(uint8_t btnId, uint8_t btnState) {
   // Cancel current effect; new effect will be initialized immediately in loop().
   activeAnimation.stop();
   DBGPRINTU("Testing effect:", currentEffect);
+  debugPrintEffect((Effect)currentEffect);
 }
 
 ////////////// Button functions for TEST_SENTENCE ////////////////
