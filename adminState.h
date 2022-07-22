@@ -13,12 +13,13 @@ enum class AdminState: unsigned int {
   AS_CONFIG_BRIGHTNESS, // Configuring the current brightness level.
   AS_ALL_SIGNS_ON,      // Turn on all signs at configured brightness level.
   AS_EXITING,           // Preparing to exit admin state.
+  AS_DARK_CALIBRATION,  // Calibrating the analog DARK sensor threshold.
   AS_REBOOTING,         // Preparing to reboot.
   AS_WAIT_FOR_CLEAR_BTNS, // Waiting for user to release buttons before returning
                           // to main menu.
 };
 
-extern AdminState adminState;
+extern void debugPrintAdminState();
 
 /** Main loop while in MS_ADMIN MacroState. */
 extern void loopStateAdmin();

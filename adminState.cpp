@@ -3,11 +3,12 @@
 #include "like-the-art.h"
 
 // Delays (milliseconds) for certain button inputs.
-constexpr unsigned int EXIT_ADMIN_DEBOUNCE = 1000;
-constexpr unsigned int REBOOT_DEBOUNCE = 3000;
+static constexpr unsigned int EXIT_ADMIN_DEBOUNCE = 1000;
+static constexpr unsigned int REBOOT_DEBOUNCE = 3000;
 
 // State machine describing where we are within the admin options.
-AdminState adminState = AdminState::AS_MAIN_MENU;
+static AdminState adminState = AdminState::AS_MAIN_MENU;
+static AdminState lastAdminState = AdminState::AS_MAIN_MENU;
 
 // Forward declarations for remainder of compilation unit...
 static void attachAdminButtonHandlers();
@@ -23,21 +24,24 @@ static void btnBrightness2(uint8_t btnId, uint8_t btnState);
 static void btnBrightness3(uint8_t btnId, uint8_t btnState);
 static void btnGoToMainMenu(uint8_t btnId, uint8_t btnState);
 static void btnCtrlAltDelete(uint8_t btnId, uint8_t btnState);
+static void btnModeDarkCal(uint8_t btnId, uint8_t btnState);
+static void btnDarkCalIncrease(uint8_t btnId, uint8_t btnState);
+static void btnDarkCalDecrease(uint8_t btnId, uint8_t btnState);
 
 ////////////// State tracked by various AdminStates ////////////////
 
 // What effect to use for current illumination?
 // (mode: TEST_ONE_SIGN, TEST_EACH_EFFECT, TEST_SENTENCE)
-int currentEffect = 0;
+static int currentEffect = 0;
 
 // What sign is lit? (mode: TEST_ONE_SIGN, IN_ORDER_TEST)
-int currentSign = 0;
+static int currentSign = 0;
 
 // What sentence is lit? (mode: TEST_SENTENCE)
-int currentSentence = 0;
+static int currentSentence = 0;
 
 // Have we changed persistent state that we need to commit?
-bool isConfigDirty = false;
+static bool isConfigDirty = false;
 
 ////////////// Button functions for main menu ////////////////
 
@@ -211,6 +215,86 @@ static void btnExitAdminMode(uint8_t btnId, uint8_t btnState) {
   DBGPRINT("Exiting admin menu...");
 }
 
+// When in DARK sensor calibration mode, LED 15 is lit when the sensor is over the
+// calibrated 'DARK' threshold.
+static constexpr unsigned int DARK_SENSOR_HIGH_SIGN_IDX = MAX_SIGN_ID;
+
+/**
+ * Turn on the sign LED when DARK is high, off otherwise.
+ */
+static void showDarkSensorIndicator() {
+  if (getLastDarkSensorValue() >= getDarkThreshold()) {
+    signs[DARK_SENSOR_HIGH_SIGN_IDX].enable();
+  } else {
+    signs[DARK_SENSOR_HIGH_SIGN_IDX].disable();
+  }
+}
+
+/**
+ * Show an animation that informs the user about the current state of the
+ * DARK sensor calibration level.
+ *
+ * We want to display a range over [-5, +5]. LED sign 5 is the 'zero' position; we set
+ * an animation where that sign always blinks, along with up to 5 signs to the left
+ * (negative) or right (positive).
+ *
+ * The last sign (LED 15) is lit if the DARK sensor is currently reading as DARK=true
+ * based on the indicated calibration level.
+ */
+static void darkCalibrationAnimation() {
+  activeAnimation.stop();
+  allSignsOff();
+  configMaxPwm();
+
+  // Turn on signs 0--4 for cal=[-5...-1], always 5 blinking (0), and signs 6..10 for cal=[1...5].
+  static constexpr int CENTER_SIGN = 5; // this is the sign to indicate "zero"; always lit.
+  // The upper or lower limit (inclusive) of sign idx's to light up:
+  int signLimit = CENTER_SIGN + fieldConfig.darkSensorCalibration;
+  int lowerSignLimit = min(CENTER_SIGN, signLimit);
+  int upperSignLimit = max(CENTER_SIGN, signLimit);
+
+  // Put a string of 1 bits between those two ends in a "sentence" to indicate the signs to light up:
+  unsigned int signBitsToLight = 0;
+  for (int i = 0; i < NUM_SIGNS; i++) {
+    if (i >= lowerSignLimit && i <= upperSignLimit) {
+      signBitsToLight |= (1 << i);
+    }
+  }
+
+  // And set those signs to blinking.
+  activeAnimation.setParameters(Sentence(0, signBitsToLight), Effect::EF_BLINK, 0,
+      durationForBlinkCount(1));
+  activeAnimation.start();
+
+  showDarkSensorIndicator();
+
+  DBGPRINTU("DARK threshold set to:", getDarkThreshold());
+  DBGPRINTU("Current DARK reading:", getLastDarkSensorValue());
+}
+
+/**
+ * Button 8 - Enter mode to calibrate DARK sensor sensitivity.
+ * Use buttons 4 and 6 to decrease threshold or increase threshold in range from -5 to +5.
+ * This value is persistent across reboots.
+ * Press 9 to return to top menu.
+ */
+static void btnModeDarkCal(uint8_t btnId, uint8_t btnState) {
+  if (btnState == BTN_OPEN) { return; }
+  adminState = AdminState::AS_DARK_CALIBRATION;
+
+  attachEmptyButtonHandlers();
+  buttons[3].setHandler(btnDarkCalDecrease);
+  buttons[5].setHandler(btnDarkCalIncrease);
+  buttons[8].setHandler(btnGoToMainMenu);
+  buttons[8].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
+
+  darkCalibrationAnimation();
+
+  DBGPRINT("Calibrating DARK sensor threshold level");
+  printDarkThreshold();
+}
+
+
 /**
  * Button 9 - Hold 3 seconds to completely reset system.
  * The first 3 signs flash 5 times and then the system is rebooted.
@@ -242,7 +326,7 @@ static void attachAdminButtonHandlers() {
   buttons[4].setHandler(btnModeChooseBrightnessLevel);
   buttons[5].setHandler(btnLightEntireBoard);
   buttons[6].setHandler(btnExitAdminMode);
-  buttons[7].setHandler(emptyBtnHandler);
+  buttons[7].setHandler(btnModeDarkCal);
   buttons[8].setHandler(btnCtrlAltDelete);
 
   buttons[6].setPushDebounceInterval(EXIT_ADMIN_DEBOUNCE); // 1 second press required.
@@ -357,10 +441,63 @@ static void btnBrightness3(uint8_t btnId, uint8_t btnState) {
   setBrightness(BRIGHTNESS_FULL);
 }
 
+////////////// Button functions for DARK_CALIBRATION ////////////////
+
+/**
+ * Update the DARK sensor threshold in a relative way;
+ * delta should be +1 or -1 to change the current val.
+ */
+static void adminAdjustDarkThreshold(int8_t delta) {
+  adjustDarkSensorCalibration(fieldConfig.darkSensorCalibration + delta);
+  isConfigDirty = true;
+  printDarkThreshold();
+  darkCalibrationAnimation();
+}
+
+static void btnDarkCalIncrease(uint8_t btnId, uint8_t btnState) {
+  if (btnState == BTN_OPEN) { return; }
+  adminAdjustDarkThreshold(+1); // Increase the threshold
+}
+
+static void btnDarkCalDecrease(uint8_t btnId, uint8_t btnState) {
+  if (btnState == BTN_OPEN) { return; }
+  adminAdjustDarkThreshold(-1); // Decrease the threshold
+}
+
+////////////// AdminState utility ////////////////
+
+// Helper macro to insert repetitive enum cases in debugPrintAdminState().
+#define PRINT_ADMIN_STATE(as) case AdminState::as: DBGPRINT(#as); break;
+
+void debugPrintAdminState(AdminState state) {
+  switch (state) {
+    PRINT_ADMIN_STATE(AS_MAIN_MENU);
+    PRINT_ADMIN_STATE(AS_IN_ORDER_TEST);
+    PRINT_ADMIN_STATE(AS_TEST_ONE_SIGN);
+    PRINT_ADMIN_STATE(AS_TEST_EACH_EFFECT);
+    PRINT_ADMIN_STATE(AS_TEST_SENTENCE);
+    PRINT_ADMIN_STATE(AS_CONFIG_BRIGHTNESS);
+    PRINT_ADMIN_STATE(AS_ALL_SIGNS_ON);
+    PRINT_ADMIN_STATE(AS_EXITING);
+    PRINT_ADMIN_STATE(AS_DARK_CALIBRATION);
+    PRINT_ADMIN_STATE(AS_REBOOTING);
+    PRINT_ADMIN_STATE(AS_WAIT_FOR_CLEAR_BTNS);
+  default:
+    DBGPRINTU("Unknown AdminState id:", (unsigned int)state);
+    break;
+  }
+}
 
 ////////////// Main admin state machine loop ////////////////
 
 void loopStateAdmin() {
+  if (adminState != lastAdminState) {
+    // adminState has changed in prior loop; print out state change notification.
+    DBGPRINT(">>> AdminState changed to:");
+    debugPrintAdminState(adminState);
+  }
+  lastAdminState = adminState;
+
   if (adminState == AdminState::AS_WAIT_FOR_CLEAR_BTNS) {
     // After we press a "return to main menu" button, wait for user to stop
     // pressing buttons before reassigning their capabilities.
@@ -376,6 +513,9 @@ void loopStateAdmin() {
       // Buttons are released; go back to the MAIN_MENU state.
       initMainMenu();
     }
+  } else if (adminState == AdminState::AS_DARK_CALIBRATION) {
+    // Independent of if the main animation is complete, keep the DARK indicator accurate.
+    showDarkSensorIndicator();
   }
 
   if (activeAnimation.isRunning()) {
@@ -415,6 +555,10 @@ void loopStateAdmin() {
   case AdminState::AS_ALL_SIGNS_ON:
     // All signs turned on @ configured brightness level on state entry.
     // Nothing to monitor in-state.
+    break;
+  case AdminState::AS_DARK_CALIBRATION:
+    // Keep showing the calibration-level indicator animation.
+    darkCalibrationAnimation();
     break;
   case AdminState::AS_EXITING:
     // First 3 signs flash 3 times. Once done, then we exit the admin state.

@@ -38,10 +38,16 @@ bool pollDarkSensor();
 /** Return the most recent averaged DARK sensor reading. */
 uint16_t getLastDarkSensorValue();
 
+uint16_t getDarkThreshold(); // Return calibrated rising-edge threshold.
+uint16_t getLightThreshold(); // Return calibrated falling-edge threshold.
+
 /**
  * Take the initial readings to establish whether it's light or dark outside on boot-up.
  * Set the macroState accordingly.
  */
 void initialDarkSensorRead();
+
+/** Print DARK sensor calibration / threshold. */
+void printDarkThreshold();
 
 #endif // _DARK_SENSOR_H

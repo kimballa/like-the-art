@@ -41,6 +41,12 @@ constexpr Effect MAX_RANDOM_EFFECT_ID = Effect::EF_MELT;
 constexpr Effect MAX_EFFECT_ID = Effect::EF_NO_EFFECT;
 constexpr unsigned int NUM_EFFECTS = (unsigned int)(MAX_EFFECT_ID) + 1;
 
+// FADE_LOVE_HATE and NO_EFFECT are not "selectable" by buttons and don't count toward
+// consistency checking of effect-based button assignments.
+constexpr unsigned int NUM_NON_ADDRESSABLE_EFFECTS = 2;
+// The number of effects we expect to see in the button handler array.
+constexpr unsigned int NUM_ADDRESSABLE_EFFECTS = NUM_EFFECTS - NUM_NON_ADDRESSABLE_EFFECTS;
+
 /** Return a random Effect. */
 inline Effect randomEffect() {
   return (Effect)random((uint32_t)MAX_RANDOM_EFFECT_ID + 1);

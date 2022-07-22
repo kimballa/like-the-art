@@ -189,14 +189,16 @@ void setup() {
   initialDarkSensorRead();
 
   // Runtime validation of our config: the number of button handler functions must match
-  // the number of effects and sentences defined. Otherwise, we either left one out, or
-  // something more dangerous, like defined a sentence button for an invalid sentence id.
-  if (numUserButtonFns() != NUM_EFFECTS + sentences.size()) {
+  // the number of (addressable) effects and sentences defined. Otherwise, we either left one out,
+  // or something more dangerous, like defined a sentence button for an invalid sentence id.
+  if (numUserButtonFns() != NUM_ADDRESSABLE_EFFECTS + sentences.size()) {
     DBGPRINTU("*** WARNING: User button handler function array has inconsistent size:", numUserButtonFns());
-    DBGPRINTU("  Effect enum count:", (unsigned int)NUM_EFFECTS);
+    DBGPRINTU("  Addressable Effect enum count:", NUM_ADDRESSABLE_EFFECTS);
     DBGPRINTU("  Sentence array length:", sentences.size());
-    DBGPRINTU("  Expected button handler array length:", (unsigned int)NUM_EFFECTS + sentences.size());
+    DBGPRINTU("  Expected button handler array length:", NUM_ADDRESSABLE_EFFECTS + sentences.size());
     DBGPRINTU("  Actual button handler array length:", numUserButtonFns());
+  } else {
+    DBGPRINTU("Buttons initialized from handler array of size:", numUserButtonFns());
   }
 
   // Set up WDT failsafe.

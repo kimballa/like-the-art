@@ -123,6 +123,7 @@ extern "C" {
 }
 
 constexpr unsigned int NUM_SIGNS = 16;
+constexpr unsigned int MAX_SIGN_ID = NUM_SIGNS - 1;
 constexpr unsigned int INVALID_SIGN_ID = NUM_SIGNS + 1;
 
 // Bitfield-based one shot ids for each sign.

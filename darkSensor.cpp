@@ -38,8 +38,8 @@ static constexpr int16_t ANALOG_DARK_SENSOR_IS_DARK_THRESHOLD = 640;
 static constexpr int16_t ANALOG_DARK_SENSOR_IS_LIGHT_THRESHOLD = 580;
 
 // The active threshold levels to use after calibration is applied.
-uint16_t calibratedDarkThreshold = ANALOG_DARK_SENSOR_IS_DARK_THRESHOLD;
-uint16_t calibratedLightThreshold = ANALOG_DARK_SENSOR_IS_LIGHT_THRESHOLD;
+static uint16_t calibratedDarkThreshold = ANALOG_DARK_SENSOR_IS_DARK_THRESHOLD;
+static uint16_t calibratedLightThreshold = ANALOG_DARK_SENSOR_IS_LIGHT_THRESHOLD;
 
 // Offset moves thresholds up and down in units of 20/1024.
 static constexpr int16_t ANALOG_SENSOR_SHIFT_PER_OFFSET = 20;
@@ -52,14 +52,16 @@ static constexpr int8_t MIN_CAL_OFFSET = -5;
 // 620/1024...
 void adjustDarkSensorCalibration(int8_t offset) {
   if (offset > MAX_CAL_OFFSET) {
-    DBGPRINTI("*** WARNING: DARK Calibration offset exceeds max:", offset);
+    DBGPRINTI("*** WARNING: DARK calibration offset exceeds max:", offset);
     offset = MAX_CAL_OFFSET;
   } else if (offset < MIN_CAL_OFFSET) {
-    DBGPRINTI("*** WARNING: DARK Calibration offset exceeds min:", offset);
+    DBGPRINTI("*** WARNING: DARK calibration offset exceeds min:", offset);
     offset = MIN_CAL_OFFSET;
   }
 
-  // TODO(aaron): Save the calibrated value of `offset` into the eeprom cfg.
+  // Save the calibrated value of `offset` into the main config structure
+  // that we can persist to EEPROM.
+  fieldConfig.darkSensorCalibration = offset;
 
   calibratedDarkThreshold = ANALOG_DARK_SENSOR_IS_DARK_THRESHOLD +
       offset * ANALOG_SENSOR_SHIFT_PER_OFFSET;
@@ -67,15 +69,22 @@ void adjustDarkSensorCalibration(int8_t offset) {
   calibratedLightThreshold = ANALOG_DARK_SENSOR_IS_LIGHT_THRESHOLD +
       offset * ANALOG_SENSOR_SHIFT_PER_OFFSET;
 
-  DBGPRINTI("Dark sensor calibration shift:", offset);
-  DBGPRINTU("  Going-dark threshold: ", calibratedDarkThreshold);
-  DBGPRINTU("  Going-light threshold:", calibratedLightThreshold);
+  printDarkThreshold();
+}
+
+uint16_t getDarkThreshold() {
+  return calibratedDarkThreshold;
+}
+
+uint16_t getLightThreshold() {
+  return calibratedLightThreshold;
 }
 
 void setupDarkSensor() {
   pinMode(DARK_SENSOR_PIN, INPUT);
 
-  // TODO(aaron): Apply eeprom calibration.
+  // Load in EEPROM-saved calibration.
+  adjustDarkSensorCalibration(fieldConfig.darkSensorCalibration);
 
   // For dark sensor; set up analog reference and discard a few reads to get accurate ones.
   analogReference(AR_DEFAULT);
@@ -205,4 +214,10 @@ void initialDarkSensorRead() {
   }
 
   debouncedDarkState = prevDark;  // Make our debouncer state consistent with macro state.
+}
+
+void printDarkThreshold() {
+  DBGPRINTI("Dark sensor calibration setting:", fieldConfig.darkSensorCalibration);
+  DBGPRINTU("  Going-dark threshold: ", calibratedDarkThreshold);
+  DBGPRINTU("  Going-light threshold:", calibratedLightThreshold);
 }

@@ -67,6 +67,7 @@ int initDefaultFieldConfig() {
   DBGPRINT("Setting up default field configuration...");
   fieldConfig.validitySignature = PROGRAMMING_SIGNATURE;
   fieldConfig.maxBrightness = DEFAULT_MAX_BRIGHTNESS;
+  fieldConfig.darkSensorCalibration = 0; // default calibration offset.
   return saveFieldConfig(&fieldConfig);
 }
 
