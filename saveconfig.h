@@ -19,7 +19,8 @@ constexpr uint8_t DEFAULT_MAX_BRIGHTNESS = BRIGHTNESS_NORMAL;
 struct __attribute__((packed, aligned(4))) field_config_t {
   uint32_t validitySignature;
   uint8_t maxBrightness;  // PWM setting
-  uint8_t padding[3];
+  int8_t darkSensorCalibration; // DARK sensor can be calibrated in range between -5 or +5.
+  uint8_t padding[2];
 };
 typedef struct field_config_t DeviceFieldConfig;
 

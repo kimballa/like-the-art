@@ -26,6 +26,7 @@ using namespace std;
 #include "adminState.h"
 #include "saveconfig.h"
 #include "animation.h"
+#include "darkSensor.h"
 
 
 // Where is the Arduino installed?

@@ -46,7 +46,8 @@ passcode.
 The sensor is Schmitt triggered so as to avoid hysteresis around twilight. Once the macro
 state has changed in either direction, it remains locked for at least one minute. There is
 approximately a 10% gap between the going-`DARK` and going-bright thresholds for the
-analog sensor.
+analog sensor; by default, 640/1024 triggers `DARK` (`RUNNING`) and 580/1024 triggers "daylight"
+(`WAITING`) mode. This can be adjusted with one of the controls in admin mode.
 
 Because the sensor is specific to the 940nm band, high output from the LEDs (around 680nm)
 does not falsely cause the sensor to believe it is daylight.
@@ -111,10 +112,18 @@ In this mode, the buttons choose between the following menu of options:
 * 7 - Hold for 1 second then release to exit admin mode. The first 3 signs flash 3 times and then
   admin mode ends. State is always reset to `RUNNING` on exit; if it's daylight, the sensor will
   then put the system into the `WAITING` state within one minute.
-* 8 - No function.
+* 8 - Calibrate the daylight sensor. In "neutral" calibration, the 6th LED sign will blink
+  slowly. You can use the `4` and `6` buttons to shift the sensor threshold down (brighter
+  light still counts as `DARK`) or up (must be even darker outside to trigger `DARK`)
+  respectively. Default calibration is 640/1024 for dark, 580/1024 for light; the buttons
+  move these thresholds up or down in 20/1024 increments up to +5 (740 and 680) or down to
+  -5 (540 and 480). Up to five LEDs to the left or right of the 6th ("center") LED will
+  blink to indicate the calibration level up to -5 or +5 clicks of 20/1024 each. The
+  *last* LED on the sign will be lit if the sensor thinks it's DARK outside. The
+  calibration level will persist across reboots.
 * 9 - Hold for 3 seconds then release to reboot the system. First 3 signs flash quickly
-  five times and then the system is reset. The programmed brightness level will persist
-  across system reboot or power-down events.
+  five times and then the system is reset. The programmed LED brightness level and daylight
+  sensor calibration will persist across system reboot or power-down events.
 
 ## Power level configuration
 

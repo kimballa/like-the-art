@@ -5,10 +5,6 @@
 
 #include "like-the-art.h"
 
-// DARK sensor is on A4 / D18.
-constexpr uint8_t DARK_SENSOR_PIN = 18;
-constexpr uint8_t DARK_SENSOR_ANALOG = A4;
-
 // PWM is on D6 -- PA18, altsel G (TCC0/WO[6]; channel 0)
 constexpr unsigned int PORT_GROUP = 0; // 0 = PORTA
 constexpr unsigned int PORT_PIN = 18;
@@ -135,119 +131,6 @@ static void printWhyLastReset() {
   }
 }
 
-// State machine to determine whether it's dark or daylight. This system only operates
-// when it's dark; we go into a no-op sleep mode for daylight.
-
-// We want the DARK sensor to be stable for a few seconds before changing state.
-static constexpr unsigned int DARK_SENSOR_DEBOUNCE_MILLIS = 5000;
-static unsigned int lastDarkSensorChangeTime = 0;
-
-// After the sensor triggers a state change, we commit to that state for 60s.
-static constexpr unsigned int DARK_SENSOR_STATE_DELAY_MILLIS = 60000;
-static unsigned int lastDarkStateChangeTime = 0;
-
-static constexpr uint8_t DARK = 1;
-static constexpr uint8_t LIGHT = 0;
-
-static uint8_t prevDark = DARK; // Prior polled value of the DARK gpio pin within debouncing period.
-static uint8_t debouncedDarkState = DARK; // Fully-debounced determination of DARK gpio state.
-
-// For analog reading of DARK sensor.
-static uint16_t darkAnalogValues[AVG_NUM_DARK_SAMPLES];
-static uint8_t lastAnalogDarkIdx = 0;
-
-// Threshold in 0..1023 for "how dark does it need to be for us to say it's DARK".
-// 0 is very bright. 1023 is quite dark indeed.
-static constexpr uint16_t ANALOG_DARK_SENSOR_IS_DARK_THRESHOLD = 640;
-// Threshold for opposite direction: when dark, at what brightness would we
-// subsequently say it is light out?
-static constexpr uint16_t ANALOG_DARK_SENSOR_IS_LIGHT_THRESHOLD = 580;
-
-/**
- * Poll the DARK sensor pin. If DARK=1 then it's dark out and we can display the magic.
- * If DARK=0 then it's light out and we should be in idle mode.
- * n.b. that if we're in admin mode, the dark sensor should not cause a state transition;
- * we stay in admin mode day or night.
- *
- * Return true if we got a valid reading, false if we're just collecting sample data.
- */
-static bool pollDarkSensor() {
-  // Perform analog read of DARK sensor to show value between 0...1024
-  // as to how dark it is outside according to the sensor. (This takes ~27us / reading.)
-  // We collect a series of (noisy) readings in a row and average them together to get
-  // a useful value. While still collecting data, this fn returns false and does not
-  // yet make a state-change judgement.
-  uint16_t darkAnalogVal = analogRead(DARK_SENSOR_ANALOG);
-  darkAnalogValues[lastAnalogDarkIdx++] = darkAnalogVal;
-  if (lastAnalogDarkIdx < AVG_NUM_DARK_SAMPLES) {
-    // Didn't get a final averaged sample. Still collecting data.
-    return false;
-  }
-
-  uint16_t averagedDarkReading = 0;
-  // We have read enough values, average them.
-  uint32_t sum = 0;
-  for (uint8_t i = 0; i < AVG_NUM_DARK_SAMPLES; i++) {
-    sum += darkAnalogValues[i];
-  }
-  averagedDarkReading = sum / AVG_NUM_DARK_SAMPLES;
-  lastAnalogDarkIdx = 0; // Reset array for next series of readings.
-
-  unsigned int now = millis();
-  // New value of isDark is Schmitt-triggered; depending on prior state (debouncedDarkState),
-  // we use a different threshold to determine the current isDark state.
-  uint8_t isDark;
-  if (debouncedDarkState == LIGHT) {
-    // We currently believe it is daylight. Use higher darkness threshold to determine if it's dark yet.
-    isDark = (averagedDarkReading > ANALOG_DARK_SENSOR_IS_DARK_THRESHOLD) ? DARK : LIGHT;
-  } else {
-    // debouncedDarkState == DARK; we have previously affirmed it's dark out.
-    // Use lower darkness threshold to determine if it's now daylight.
-    // (We track this independently of macroState because MS_ADMIN state confuses matters.
-    // What matters here is this fn's internal dark/light Schmitt trigger state machine.)
-    isDark = (averagedDarkReading < ANALOG_DARK_SENSOR_IS_LIGHT_THRESHOLD) ? LIGHT : DARK;
-  }
-
-  if constexpr (REPORT_ANALOG_DARK_SENSOR) {
-    DBGPRINTU("DARK sensor avg:", averagedDarkReading);
-    // DBGPRINTU("Current DARK Bool:", isDark);
-  }
-
-  if (isDark != prevDark) {
-    lastDarkSensorChangeTime = now;
-    prevDark = isDark;
-  }
-
-  // Check that the sensor value has been stable (debounced) for long enough.
-  unsigned int sensorStabilityTime = now - lastDarkSensorChangeTime;
-  bool sensorIsStable = sensorStabilityTime >= DARK_SENSOR_DEBOUNCE_MILLIS;
-
-  // Lock in our state changes: even on a stable sensor, don't change state back and
-  // forth particularly quickly; commit to a new state for a reasonable dwell time.
-  unsigned int stateDuration = now - lastDarkStateChangeTime;
-  bool stateDwellLongEnough = stateDuration > DARK_SENSOR_STATE_DELAY_MILLIS;
-
-  // In order to change state, we need a stable sensor AND enough time in the prior state.
-  bool changeAllowed = sensorIsStable && stateDwellLongEnough;
-  if (changeAllowed) {
-    // We have a fully-debounced state to record. Save it so we know which way to aim
-    // the Schmitt trigger next.
-    debouncedDarkState = isDark;
-  }
-
-  if (changeAllowed && isDark && macroState == MacroState::MS_WAITING) {
-    // Time to start the show.
-    lastDarkStateChangeTime = now;
-    setMacroStateRunning();
-  } else if (changeAllowed && !isDark && macroState == MacroState::MS_RUNNING) {
-    // The sun has found us; pack up for the day.
-    lastDarkStateChangeTime = now;
-    setMacroStateWaiting();
-  }
-
-  return true;
-}
-
 void setup() {
   DBGSETUP();
 
@@ -289,8 +172,6 @@ void setup() {
   // Set up PWM on PORT_GROUP:PORT_PIN via TCC0.
   pwmTimer.setupTcc();
 
-  pinMode(DARK_SENSOR_PIN, INPUT);
-
   // Define signs and map them to I/O channels.
   setupSigns(parallelBank0, parallelBank1);
   setupSentences(); // Define collections of signs for each sentence.
@@ -302,28 +183,10 @@ void setup() {
   // Connects button-input I2C and configures Button dispatch handler methods.
   setupButtons();
 
-  // For dark sensor; set up analog reference and discard a few reads to get accurate ones.
-  analogReference(AR_DEFAULT);
-  for (uint8_t i = 0; i < 10; i++) {
-    delay(5);
-    analogRead(DARK_SENSOR_ANALOG);
-  }
-
+  // Open the analog channel on the DARK sensor pin and apply calibration settings from EEPROM.
+  setupDarkSensor();
   // Decide whether to begin in RUNNING (i.e. "DARK") mode or WAITING (DARK==0; daylight).
-  // Repeatedly call pollDarkSensor() until we get enough readings to have a valid average.
-  // Put the current DARK sensor boolean in prevDark, and immediately use that to set the initial
-  // state without waiting for a full multi-second debounce cycle.
-  while (!pollDarkSensor()) {
-    delay(1);
-  }
-
-  if (prevDark == LIGHT) {
-    setMacroStateWaiting();
-  } else {
-    setMacroStateRunning();
-  }
-
-  debouncedDarkState = prevDark;  // Make our debouncer state consistent with macro state.
+  initialDarkSensorRead();
 
   // Runtime validation of our config: the number of button handler functions must match
   // the number of effects and sentences defined. Otherwise, we either left one out, or
