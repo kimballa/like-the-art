@@ -3,6 +3,7 @@
 #include "like-the-art.h"
 
 static constexpr uint8_t BTN0_PIN = 11; // Button 0 is on D11.
+static constexpr uint8_t SELF_TEST_BTN_PIN = 4; // The admin self-test button is on D4.
 
 // PCF8574N on channel 0x23 reads buttons 1--8.
 static I2CParallel buttonBank;
@@ -29,8 +30,12 @@ static constexpr unsigned long TOO_FAST_LOCKOUT_MILLIS = 25000;
 static constexpr uint8_t BUTTON_ROTATION_THRESHOLD = 25;
 static uint8_t numButtonPresses = 0;
 
-// All 9 Button instances.
+// All 9 standard UI Button instances.
 vector<Button> buttons;
+
+static void adminSelfTestButtonHandler(uint8_t btnId, uint8_t btnState); // fwd-declare method.
+// Another button wired internally to the enclosure enters admin self-test mode.
+static Button adminSelfTestButton(ADMIN_BTN_ID, adminSelfTestButtonHandler);
 
 static void wipePasswordHistory() {
   firstPressIdx = 0;
@@ -52,11 +57,12 @@ void setupButtons() {
   buttonBank.enableInputs(0xFF); // all 8 channels of button bank are inputs.
 
   pinMode(BTN0_PIN, INPUT_PULLUP);
+  pinMode(SELF_TEST_BTN_PIN, INPUT_PULLUP);
 
   // Allocate the button state and dispatch handlers.
   buttons.clear();
-  buttons.reserve(NUM_BUTTONS);
-  for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
+  buttons.reserve(NUM_MAIN_BUTTONS);
+  for (uint8_t i = 0; i < NUM_MAIN_BUTTONS; i++) {
     buttons.emplace_back(i, defaultBtnHandler);
   }
 
@@ -85,6 +91,9 @@ void pollButtons() {
     uint8_t btnState = (btnBankState >> i) & 0x1;
     buttons[i + 1].update(btnState);
   }
+
+  // The hard-wired self-test button is also direct gpio.
+  adminSelfTestButton.update(digitalRead(SELF_TEST_BTN_PIN));
 }
 
 /**
@@ -211,6 +220,17 @@ void emptyBtnHandler(uint8_t btnId, uint8_t btnState) {
 /** Default button-press handler that just records history. */
 void defaultBtnHandler(uint8_t btnId, uint8_t btnState) {
   recordButtonHistory(btnId, btnState);
+}
+
+/**
+ * Button handler for the hard-wired admin self-test button inside the enclosure.
+ * When pressed, switch to the MS_ADMIN macro state and start the in-order self test.
+ */
+void adminSelfTestButtonHandler(uint8_t btnId, uint8_t btnState) {
+  if (btnState == BTN_OPEN) { return; }
+
+  setMacroStateAdmin();
+  performInOrderTest();
 }
 
 
@@ -379,8 +399,8 @@ void attachStandardButtonHandlers() {
   // Create an array of all possible button handlers in a random order...
   shuffleButtonHandlers();
 
-  // ... And choose the first `NUM_BUTTONS` elements from it.
-  for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
+  // ... And choose the first `NUM_MAIN_BUTTONS` elements from it.
+  for (uint8_t i = 0; i < NUM_MAIN_BUTTONS; i++) {
     buttons[i].setHandler(shuffledUserButtonFns[i]);
 
     buttons[i].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
@@ -395,7 +415,7 @@ void attachStandardButtonHandlers() {
 void attachWaitModeButtonHandlers() {
   DBGPRINT("Resetting to default button handlers...");
 
-  for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
+  for (uint8_t i = 0; i < NUM_MAIN_BUTTONS; i++) {
     buttons[i].setHandler(defaultBtnHandler);
     buttons[i].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
     buttons[i].setReleaseDebounceInterval(BTN_DEBOUNCE_MILLIS);
@@ -408,7 +428,7 @@ void attachWaitModeButtonHandlers() {
  * Attach the empty handler (and default timing) to all buttons.
  */
 void attachEmptyButtonHandlers() {
-  for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
+  for (uint8_t i = 0; i < NUM_MAIN_BUTTONS; i++) {
     buttons[i].setHandler(emptyBtnHandler);
     buttons[i].setPushDebounceInterval(BTN_DEBOUNCE_MILLIS);
     buttons[i].setReleaseDebounceInterval(BTN_DEBOUNCE_MILLIS);

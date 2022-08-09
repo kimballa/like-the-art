@@ -27,5 +27,7 @@ extern void loopStateAdmin();
 /** Switch to the MS_ADMIN MacroState. */
 extern void setMacroStateAdmin();
 
+/** Start the word-at-a-time self-test process. Must call setMacroStateAdmin() first. */
+extern void performInOrderTest();
 
 #endif /* _LTA_ADMIN_STATE_H */

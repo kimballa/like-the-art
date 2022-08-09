@@ -6,7 +6,10 @@
 /* 25 ms delay for a button press to be registered as "valid." */
 constexpr unsigned int BTN_DEBOUNCE_MILLIS = 25;
 
-constexpr uint8_t NUM_BUTTONS = 9;
+// Main UI buttons are numbers 0..8.
+constexpr uint8_t NUM_MAIN_BUTTONS = 9;
+// The internal self-test button has the next id.
+constexpr uint8_t ADMIN_BTN_ID = NUM_MAIN_BUTTONS;
 
 // Button::getState() returns 0 if a button is registered as pressed, 1 if open.
 constexpr uint8_t BTN_PRESSED = 0;

@@ -55,20 +55,33 @@ static void initMainMenu() {
 }
 
 /**
+ * Set up the full sign in-order test. Auto Light up each sign in series.
+ * Repeats indefinitely until a new operation is chosen.
+ * Main menu remains active.
+ *
+ * This can be selected by button 1 in admin mode, or by the out-of-band
+ * self-test button.
+ */
+void performInOrderTest() {
+  DBGPRINT("Performing in-order sign test");
+  adminState = AdminState::AS_IN_ORDER_TEST;
+  activeAnimation.stop();
+  allSignsOff();
+  configMaxPwm();
+  currentSign = 0;
+  activeAnimation.setParameters(Sentence(0, 1 << currentSign), Effect::EF_APPEAR, 0, 1000);
+  activeAnimation.start();
+}
+
+/**
  * Button 1: Full sign in-order test. Auto Light up each sign in series.
  * Repeats indefinitely until a new operation is chosen.
  * Main menu remains active.
  */
 static void btnInOrderTest(uint8_t btnId, uint8_t btnState) {
   if (btnState == BTN_OPEN) { return; }
-  adminState = AdminState::AS_IN_ORDER_TEST;
 
-  allSignsOff();
-  configMaxPwm();
-  currentSign = 0;
-  activeAnimation.setParameters(Sentence(0, 1 << currentSign), Effect::EF_APPEAR, 0, 1000);
-  activeAnimation.start();
-  DBGPRINT("Performing in-order sign test");
+  performInOrderTest();
 }
 
 /**
@@ -502,7 +515,7 @@ void loopStateAdmin() {
     // After we press a "return to main menu" button, wait for user to stop
     // pressing buttons before reassigning their capabilities.
     bool buttonsAreClear = true;
-    for (int i = 0; i < NUM_BUTTONS; i++) {
+    for (int i = 0; i < NUM_MAIN_BUTTONS; i++) {
       if (buttons[i].getState() == BTN_PRESSED) {
         buttonsAreClear = false;
         break;
