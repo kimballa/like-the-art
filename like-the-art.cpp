@@ -6,15 +6,16 @@
 #include "like-the-art.h"
 
 // PWM is on D6 -- PA18, altsel G (TCC0/WO[6]; channel 0)
-constexpr unsigned int PORT_GROUP = 0; // 0 = PORTA
-constexpr unsigned int PORT_PIN = 18;
-constexpr unsigned int PORT_FN = 0x6; // 0=A, 1=B, ... 0x5=F, 0x6=G, ...
+static constexpr unsigned int PWM_PORT_GROUP = 0; // 0 = PORTA
+static constexpr unsigned int PWM_PORT_PIN = 18;
+static constexpr unsigned int PWM_PORT_FN = 0x6; // 0=A, 1=B, ... 0x5=F, 0x6=G, ...
 
 static Tcc* const TCC = TCC0;
-constexpr unsigned int PWM_CHANNEL = 0;
-constexpr unsigned int PWM_FREQ = 6000; // 6 KHz
+static constexpr unsigned int PWM_CHANNEL = 0;
+static constexpr unsigned int PWM_FREQ = 6000; // 6 KHz
 
-PwmTimer pwmTimer(PORT_GROUP, PORT_PIN, PORT_FN, TCC, PWM_CHANNEL, PWM_FREQ, DEFAULT_PWM_PRESCALER);
+PwmTimer pwmTimer(PWM_PORT_GROUP, PWM_PORT_PIN, PWM_PORT_FN, TCC,
+    PWM_CHANNEL, PWM_FREQ, DEFAULT_PWM_PRESCALER);
 
 // Integrated neopixel on D8.
 Adafruit_NeoPixel neoPixel(1, 8, NEO_GRB | NEO_KHZ800);
@@ -169,7 +170,7 @@ void setup() {
   // Print current config'd brightness to dbg console.
   printCurrentBrightness();
 
-  // Set up PWM on PORT_GROUP:PORT_PIN via TCC0.
+  // Set up PWM on PWM_PORT_GROUP:PWM_PORT_PIN via TCC0.
   pwmTimer.setupTcc();
 
   // Define signs and map them to I/O channels.
