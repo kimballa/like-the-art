@@ -216,7 +216,7 @@ void Animation::_setParamsBuildRandom(const Sentence &s, const Effect e, uint32_
   // Randomize the order we light up the sentence words in this animation session:
 
   // Step 1: Reset ordering array.
-  memset(_buildRandomOrder, 0, sizeof(unsigned int) * NUM_SIGNS);
+  memset(_buildRandomOrder, 0, sizeof(uint8_t) * NUM_SIGNS);
 
   // Step 2: Put sign ids into the ordering array sequentially.
   uint32_t signBits = s.getSignBits();
